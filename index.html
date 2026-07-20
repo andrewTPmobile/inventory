@@ -7,13 +7,13 @@
 <title>ULTRAFIT — Inventory Dashboard</title>
 <style>
   :root {
-    --bg: #0f1734;
+    --bg: #0f1115;
     --panel: #171a21;
     --panel-2: #1e222b;
     --line: #2a2f3a;
     --text: #e7e9ee;
     --muted: #9aa3b2;
-    --accent: #195da3;
+    --accent: #4f8cff;
     --ok: #2fbf71;
     --warn: #e0a83d;
     --bad: #e5484d;
@@ -92,15 +92,6 @@
   .thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; background: var(--panel-2); }
   .muted { color: var(--muted); }
   .status-chip { font-size: 11px; color: var(--muted); text-transform: uppercase; }
-  #login {
-    position: fixed; inset: 0; background: var(--bg);
-    display: none; align-items: center; justify-content: center; z-index: 20;
-  }
-  #login .box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: 320px; }
-  #login h2 { margin: 0 0 6px; }
-  #login p { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
-  #login input { width: 100%; margin-bottom: 12px; }
-  #login button { width: 100%; }
   #err { color: var(--bad); font-size: 13px; min-height: 18px; }
   .loading { padding: 40px 22px; color: var(--muted); }
 
@@ -110,7 +101,6 @@
     header h1 { font-size: 16px; }
     header h1 .logo { height: 22px; }
     header .sub { font-size: 13px; order: 5; flex-basis: 100%; }
-   
 
     /* Stats: three compact cards per row */
     .stats { padding: 12px 16px 0; gap: 8px; }
@@ -140,6 +130,58 @@
 </head>
 <body>
 
+<header>
+  <h1><img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" class="logo" /> Inventory</h1>
+  <span class="sub" id="updated">—</span>
+  <div class="spacer"></div>
+  <button class="primary" onclick="loadData()">↻ Refresh</button>
+</header>
+
+<div class="stats" id="stats"></div>
+
+<div class="toolbar">
+  <div class="field" style="flex:1;max-width:380px;min-width:240px;">
+    <label for="search">Search</label>
+    <input type="search" id="search" placeholder="Product, SKU, vendor, type…" oninput="render()" />
+  </div>
+  <div class="field">
+    <label for="locationFilter">Location</label>
+    <select id="locationFilter" onchange="render()">
+      <option value="all">All locations</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="typeFilter">Product Type</label>
+    <select id="typeFilter" onchange="render()">
+      <option value="all">All types</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="filter">Stock</label>
+    <select id="filter" onchange="render()">
+      <option value="all">All stock</option>
+      <option value="neg">Negative only</option>
+      <option value="zero">Zero only</option>
+      <option value="low">Low (1–5)</option>
+      <option value="in">In stock (&gt;0)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="statusFilter">Status</label>
+    <select id="statusFilter" onchange="render()">
+      <option value="active">Active only</option>
+      <option value="all">All statuses</option>
+    </select>
+  </div>
+  <span class="muted" id="rowcount"></span>
+</div>
+
+<div class="wrap">
+  <div id="tableHost"><div class="loading">Loading inventory…</div></div>
+</div>
+
+<div id="err" style="padding:0 22px 30px;"></div>
+
 <script>
   const LOW_THRESHOLD = 5;
   // Defaults applied the first time the page loads (user can change them after)
@@ -149,7 +191,6 @@
   let DATA = [];
   let sortKey = "qty";
   let sortAsc = false; // qty highest-first on load
-  let PASS = "";
 
   function fmtMoney(n) {
     if (n === null || n === undefined) return "";
@@ -171,7 +212,26 @@
   }
 
   async function loadData() {
-    
+    document.getElementById("err").textContent = "";
+    document.getElementById("tableHost").innerHTML = '<div class="loading">Loading inventory…</div>';
+    try {
+      const r = await fetch("/api/inventory");
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || ("HTTP " + r.status));
+      }
+      const j = await r.json();
+      DATA = j.rows || [];
+      populateFilters(j.locations || []);
+      const d = new Date(j.updatedAt);
+      document.getElementById("updated").textContent =
+        "Updated " + d.toLocaleString() + " · " + j.count + " items";
+      render();
+    } catch (e) {
+      document.getElementById("tableHost").innerHTML = "";
+      document.getElementById("err").textContent = "Error: " + e.message;
+    }
+  }
 
   // Fill the location + product-type dropdowns (keeps current selection if still valid)
   function populateFilters(locations) {
@@ -293,9 +353,9 @@
     return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  
-
-></script>
+  // No login — load inventory immediately.
+  loadData();
+</script>
 <!-- Vercel Web Analytics (framework-agnostic; works on plain static sites) -->
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
