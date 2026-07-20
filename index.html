@@ -110,7 +110,7 @@
     header h1 { font-size: 16px; }
     header h1 .logo { height: 22px; }
     header .sub { font-size: 13px; order: 5; flex-basis: 100%; }
-    #clerk-user { order: 3; }
+   
 
     /* Stats: three compact cards per row */
     .stats { padding: 12px 16px 0; gap: 8px; }
@@ -139,71 +139,6 @@
 </style>
 </head>
 <body>
-
-<!-- Sign-in gate (Clerk mounts its email+password sign-in here when signed out) -->
-<div id="login">
-  <div class="box" style="width:400px;">
-    <h2 style="display:flex;align-items:center;gap:8px;justify-content:center;">
-      <img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" style="height:26px;" /> Inventory
-    </h2>
-    <p style="text-align:center;">Sign in to continue.</p>
-    <div id="clerk-signin"></div>
-    <div id="loginErr" style="color:var(--bad);font-size:13px;margin-top:10px;min-height:16px;text-align:center;"></div>
-  </div>
-</div>
-
-<header>
-  <h1><img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" class="logo" /> Inventory</h1>
-  <span class="sub" id="updated">—</span>
-  <div class="spacer"></div>
-  <div id="clerk-user" style="display:flex;align-items:center;"></div>
-  <button class="primary" onclick="loadData()">↻ Refresh</button>
-</header>
-
-<div class="stats" id="stats"></div>
-
-<div class="toolbar">
-  <div class="field" style="flex:1;max-width:380px;min-width:240px;">
-    <label for="search">Search</label>
-    <input type="search" id="search" placeholder="Product, SKU, vendor, type…" oninput="render()" />
-  </div>
-  <div class="field">
-    <label for="locationFilter">Location</label>
-    <select id="locationFilter" onchange="render()">
-      <option value="all">All locations</option>
-    </select>
-  </div>
-  <div class="field">
-    <label for="typeFilter">Product Type</label>
-    <select id="typeFilter" onchange="render()">
-      <option value="all">All types</option>
-    </select>
-  </div>
-  <div class="field">
-    <label for="filter">Stock</label>
-    <select id="filter" onchange="render()">
-      <option value="all">All stock</option>
-      <option value="neg">Negative only</option>
-      <option value="zero">Zero only</option>
-      <option value="low">Low (1–5)</option>
-      <option value="in">In stock (&gt;0)</option>
-    </select>
-  </div>
-  <div class="field">
-    <label for="statusFilter">Status</label>
-    <select id="statusFilter" onchange="render()">
-      <option value="active">Active only</option>
-      <option value="all">All statuses</option>
-    </select>
-  </div>
-  <span class="muted" id="rowcount"></span>
-</div>
-
-<div class="wrap">
-  <div id="tableHost"><div class="loading">Loading inventory…</div></div>
-</div>
-
-<div id="err" style="padding:0 22px 30px;"></div>
 
 <script>
   const LOW_THRESHOLD = 5;
@@ -236,31 +171,7 @@
   }
 
   async function loadData() {
-    // Must be signed in (Clerk) to fetch data
-    if (!window.Clerk || !window.Clerk.session) { showLogin(); return; }
-    document.getElementById("err").textContent = "";
-    document.getElementById("tableHost").innerHTML = '<div class="loading">Loading inventory…</div>';
-    try {
-      const token = await window.Clerk.session.getToken();
-      const r = await fetch("/api/inventory", { headers: { Authorization: "Bearer " + token } });
-      if (r.status === 401) { showLogin(); return; }
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || ("HTTP " + r.status));
-      }
-      const j = await r.json();
-      DATA = j.rows || [];
-      populateFilters(j.locations || []);
-      const d = new Date(j.updatedAt);
-      document.getElementById("updated").textContent =
-        "Updated " + d.toLocaleString() + " · " + j.count + " items";
-      hideLogin();
-      render();
-    } catch (e) {
-      document.getElementById("tableHost").innerHTML = "";
-      document.getElementById("err").textContent = "Error: " + e.message;
-    }
-  }
+    
 
   // Fill the location + product-type dropdowns (keeps current selection if still valid)
   function populateFilters(locations) {
@@ -382,58 +293,8 @@
     return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  // ---- sign-in gate (Clerk) ----
-  function showLogin() {
-    document.getElementById("login").style.display = "flex";
-    if (window.Clerk) {
-      try { window.Clerk.mountSignIn(document.getElementById("clerk-signin")); } catch (e) {}
-    }
-  }
-  function hideLogin() { document.getElementById("login").style.display = "none"; }
+  
 
-  let clerkInited = false;
-  async function initClerk() {
-    if (clerkInited || !window.Clerk) return;
-    clerkInited = true;
-    try {
-      await window.Clerk.load();
-    } catch (e) {
-      clerkInited = false;
-      document.getElementById("loginErr").textContent = "Sign-in failed to load. Refresh the page.";
-      return;
-    }
-    // Re-check whenever auth state changes (sign in / sign out)
-    window.Clerk.addListener(({ user }) => {
-      if (user) {
-        hideLogin();
-        window.Clerk.mountUserButton(document.getElementById("clerk-user"));
-        loadData();
-      } else {
-        showLogin();
-      }
-    });
-    // Initial state
-    if (window.Clerk.user) {
-      hideLogin();
-      window.Clerk.mountUserButton(document.getElementById("clerk-user"));
-      loadData();
-    } else {
-      showLogin();
-    }
-  }
-
-  // Wait for the Clerk script to finish loading, then initialize.
-  if (window.Clerk) { initClerk(); }
-  else { window.addEventListener("load", () => { if (window.Clerk) initClerk(); }); }
-</script>
-<!-- Clerk (vanilla JS SDK) — loads email+password sign-in; signups limited to the allowlist -->
-<script
-  async
-  crossorigin="anonymous"
-  data-clerk-publishable-key="pk_live_Y2xlcmsudWx0cmFmaXRpbnZlbnRvcnkuY29tJA"
-  src="https://clerk.ultrafitinventory.com/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
-  type="text/javascript"
-  onload="initClerk()"
 ></script>
 <!-- Vercel Web Analytics (framework-agnostic; works on plain static sites) -->
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
