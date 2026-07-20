@@ -1,0 +1,12 @@
+{
+  "name": "ultrafit-inventory-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Internal live inventory dashboard pulling from Shopify Admin API. Optional Clerk login (enabled only when CLERK_SECRET_KEY is set).",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@clerk/backend": "^1.15.0"
+  }
+}
