@@ -30,7 +30,7 @@ const PRODUCTS_QUERY = `
         productType
         status
         featuredImage { url }
-        variants(first: 25) {
+        variants(first: 100) {
           nodes {
             id
             title
