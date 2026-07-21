@@ -86,8 +86,16 @@
   th.sorted::after { content: " \25BE"; color: var(--accent); }
   th.sorted.asc::after { content: " \25B4"; }
   tbody tr:hover { background: var(--panel-2); }
-  td.qty { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  td.qty { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; }
   td.price { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .west-mode .toolbar .field:not(#searchField) { display: none; }
+  .west-mode th:nth-child(1), .west-mode td:nth-child(1),
+  .west-mode th:nth-child(3), .west-mode td:nth-child(3),
+  .west-mode th:nth-child(4), .west-mode td:nth-child(4),
+  .west-mode th:nth-child(5), .west-mode td:nth-child(5) {
+    display: none;
+  }
+  .west-mode td.qty { font-size: 24px; padding: 14px 12px; }
   .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
   .pill.ok { background: rgba(47,191,113,.15); color: var(--ok); }
   .pill.warn { background: rgba(224,168,61,.15); color: var(--warn); }
@@ -131,8 +139,8 @@
   <button class="primary" onclick="loadData()">↻ Refresh</button>
 </header>
 <div class="stats" id="stats"></div>
-<div class="toolbar">
-  <div class="field" style="flex:1;max-width:380px;min-width:240px;">
+<div class="toolbar" id="toolbar">
+  <div class="field" id="searchField" style="flex:1;max-width:380px;min-width:240px;">
     <label for="search">Search</label>
     <input type="search" id="search" placeholder="Product, SKU, vendor, type…" oninput="render()" />
   </div>
@@ -278,6 +286,12 @@
 
   function render() {
     if (!DATA.length) return;
+    const locFilter = document.getElementById("locationFilter").value;
+    const isWestMode = locFilter === "ULTRAFIT WEST";
+
+    // Apply west mode styling
+    document.getElementById("toolbar").classList.toggle("west-mode", isWestMode);
+
     const rows = currentRows();
     const typeFilter = document.getElementById("typeFilter").value;
     let activeRows = DATA.filter(r => r.status === "ACTIVE");
@@ -318,11 +332,13 @@
       html += `<td class="muted">${escapeHtml(r.type)}</td>`;
       html += `<td class="muted">${escapeHtml(r.variant)}</td>`;
       html += `<td class="price">${fmtMoney(r.price)}</td>`;
-      html += `<td class="qty">${stockPill(effQty(r))}</td>`;
+      html += `<td class="qty">${isWestMode ? effQty(r) : stockPill(effQty(r))}</td>`;
       html += "</tr>";
     }
     html += "</tbody></table>";
-    document.getElementById("tableHost").innerHTML = html;
+    const tableHost = document.getElementById("tableHost");
+    tableHost.innerHTML = html;
+    tableHost.classList.toggle("west-mode", isWestMode);
   }
 
   function setSort(key) {
