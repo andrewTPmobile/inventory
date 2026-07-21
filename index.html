@@ -65,6 +65,9 @@
     width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center;
     justify-content: center; font-size: 22px; margin-bottom: 14px;
   }
+  .tile img.map {
+    display: block; width: 100%; height: 130px; object-fit: contain; margin-bottom: 14px;
+  }
   .tile h3 { margin: 0 0 4px; font-size: 18px; letter-spacing: .3px; }
   .tile p { margin: 0; color: var(--muted); font-size: 14px; }
   .tile .bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; }
@@ -154,25 +157,29 @@
   <div class="grid">
     <a class="tile" href="/INVENTORY.html?loc=ULTRAFIT%20NORTH%20USA">
       <div class="bar" style="background:var(--green)"></div>
-      <div class="icon" style="background:rgba(121,188,41,.15)">📦</div>
+      <img class="map" src="/region_north.png" alt="North region"
+           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(121,188,41,.15)&quot;>📦</div>'">
       <h3>North Inventory</h3>
       <p>Live stock at ULTRAFIT North USA — Minneapolis, MN</p>
     </a>
     <a class="tile" href="/INVENTORY.html?loc=ULTRAFIT%20SOUTH">
       <div class="bar" style="background:#1B75BB"></div>
-      <div class="icon" style="background:rgba(27,117,187,.15)">📦</div>
+      <img class="map" src="/region_south.png" alt="South region"
+           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(27,117,187,.15)&quot;>📦</div>'">
       <h3>South Inventory</h3>
       <p>Live stock at ULTRAFIT South — Houston, TX</p>
     </a>
     <a class="tile" href="/INVENTORY.html?loc=ULTRAFIT%20WEST">
       <div class="bar" style="background:var(--orange)"></div>
-      <div class="icon" style="background:rgba(237,116,27,.15)">📦</div>
+      <img class="map" src="/region_west.png" alt="West region"
+           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(237,116,27,.15)&quot;>📦</div>'">
       <h3>West Inventory</h3>
       <p>Live stock at ULTRAFIT West</p>
     </a>
     <a class="tile disabled" href="javascript:alert('Texas inventory is coming soon!')">
       <div class="bar" style="background:var(--tx)"></div>
-      <div class="icon" style="background:rgba(91,199,240,.15)">📦</div>
+      <img class="map" src="/region_texas.png" alt="Texas region"
+           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(91,199,240,.15)&quot;>📦</div>'">
       <h3>Texas Inventory <span class="badge">COMING SOON</span></h3>
       <p>ULTRAFIT Texas — Keller, TX</p>
     </a>
