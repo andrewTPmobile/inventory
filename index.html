@@ -211,25 +211,14 @@
   </div>
   <div class="field">
     <label for="typeFilter">Product Type</label>
-    <select id="typeFilter" onchange="render()">
+    <select id="typeFilter" onchange="populateVariantFilter(); render()">
       <option value="all">All types</option>
     </select>
   </div>
   <div class="field">
-    <label for="filter">Stock</label>
-    <select id="filter" onchange="render()">
-      <option value="all">All stock</option>
-      <option value="neg">Negative only</option>
-      <option value="zero">Zero only</option>
-      <option value="low">Low (1–5)</option>
-      <option value="in">In stock (&gt;0)</option>
-    </select>
-  </div>
-  <div class="field">
-    <label for="statusFilter">Status</label>
-    <select id="statusFilter" onchange="render()">
-      <option value="active">Active only</option>
-      <option value="all">All statuses</option>
+    <label for="variantFilter">Variant</label>
+    <select id="variantFilter" onchange="render()">
+      <option value="all">All variants</option>
     </select>
   </div>
   <span class="muted" id="rowcount"></span>
@@ -253,8 +242,7 @@
     const locSel = document.getElementById("locationFilter");
     if ([...locSel.options].some(o => o.value === loc)) locSel.value = loc;
     document.getElementById("typeFilter").value = "all";
-    document.getElementById("filter").value = "all";
-    document.getElementById("statusFilter").value = "active";
+    document.getElementById("variantFilter").value = "all";
     document.getElementById("search").value = "";
     closeMenu();
     render();
@@ -309,26 +297,65 @@
     }
   }
 
+  // Only these product types appear in the filter, in this order.
+  // (Matched case-insensitively; a type shows once products in Shopify use it.)
+  const ALLOWED_TYPES = [
+    "BLACK PPF",
+    "CLEAR PPF",
+    "COLOR SHIFT PPF",
+    "HEADLIGHT PPF",
+    "MAX BLUE 70",
+    "MAX BLUE",
+    "RETRO COLOR PPF",
+    "SPF",
+    "Vivid Series",
+    "WINDSHIELD PROTECTION",
+    "WINDSHIELD PROTECTION FILM",
+    "WPF"
+  ];
+
   function populateFilters(locations) {
     const locSel = document.getElementById("locationFilter");
-    const prevLoc = firstLoad ? DEFAULT_LOCATION : locSel.value;
+    // Allow deep links like /?loc=ULTRAFIT%20SOUTH from the checkout pages' menus
+    const urlLoc = new URLSearchParams(window.location.search).get("loc");
+    const prevLoc = firstLoad ? (urlLoc || DEFAULT_LOCATION) : locSel.value;
     locSel.innerHTML = '<option value="all">All locations</option>' +
       locations.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
     if ([...locSel.options].some(o => o.value === prevLoc)) locSel.value = prevLoc;
-    const types = Array.from(new Set(DATA.map(r => r.type).filter(Boolean))).sort();
+
+    // Types present in the data, shown only if whitelisted, in whitelist order
+    const present = Array.from(new Set(DATA.map(r => r.type).filter(Boolean)));
+    const types = ALLOWED_TYPES
+      .map(a => present.find(p => p.toUpperCase() === a.toUpperCase()))
+      .filter(Boolean)
+      .filter((v, i, arr) => arr.indexOf(v) === i);
     const typeSel = document.getElementById("typeFilter");
-    const prevType = firstLoad ? DEFAULT_TYPE : typeSel.value;
+    const prevType = firstLoad ? (urlLoc ? "all" : DEFAULT_TYPE) : typeSel.value;
     typeSel.innerHTML = '<option value="all">All types</option>' +
       types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
     if ([...typeSel.options].some(o => o.value === prevType)) typeSel.value = prevType;
+
+    populateVariantFilter();
     firstLoad = false;
+  }
+
+  // Variant dropdown follows the selected type (falls back to all variants)
+  function populateVariantFilter() {
+    const typeSel = document.getElementById("typeFilter");
+    const varSel = document.getElementById("variantFilter");
+    const prevVar = varSel.value || "all";
+    let rows = DATA;
+    if (typeSel.value !== "all") rows = rows.filter(r => r.type === typeSel.value);
+    const variants = Array.from(new Set(rows.map(r => r.variant).filter(Boolean))).sort();
+    varSel.innerHTML = '<option value="all">All variants</option>' +
+      variants.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    if ([...varSel.options].some(o => o.value === prevVar)) varSel.value = prevVar;
   }
 
   function currentRows() {
     const q = document.getElementById("search").value.trim().toLowerCase();
-    const filter = document.getElementById("filter").value;
-    const statusFilter = document.getElementById("statusFilter").value;
     const typeFilter = document.getElementById("typeFilter").value;
+    const variantFilter = document.getElementById("variantFilter").value;
     const locFilter = document.getElementById("locationFilter").value;
     let rows = DATA.slice();
 
@@ -341,12 +368,9 @@
       if (locFilter !== "all") {
         rows = rows.filter(r => r.source === "shopify");
       }
-      if (statusFilter === "active") rows = rows.filter(r => r.status === "ACTIVE");
+      // All stock levels and all statuses are always shown
       if (typeFilter !== "all") rows = rows.filter(r => r.type === typeFilter);
-      if (filter === "neg") rows = rows.filter(r => effQty(r) < 0);
-      else if (filter === "zero") rows = rows.filter(r => effQty(r) === 0);
-      else if (filter === "low") rows = rows.filter(r => effQty(r) >= 1 && effQty(r) <= LOW_THRESHOLD);
-      else if (filter === "in") rows = rows.filter(r => effQty(r) > 0);
+      if (variantFilter !== "all") rows = rows.filter(r => r.variant === variantFilter);
     }
 
     if (q) {
@@ -378,16 +402,16 @@
 
     const rows = currentRows();
     const typeFilter = document.getElementById("typeFilter").value;
-    let activeRows = DATA.filter(r => r.status === "ACTIVE");
-    if (typeFilter !== "all") activeRows = activeRows.filter(r => r.type === typeFilter);
-    const neg = activeRows.filter(r => effQty(r) < 0).length;
-    const zero = activeRows.filter(r => effQty(r) === 0).length;
-    const low = activeRows.filter(r => effQty(r) >= 1 && effQty(r) <= LOW_THRESHOLD).length;
-    const totalUnits = activeRows.reduce((s, r) => s + (effQty(r) > 0 ? effQty(r) : 0), 0);
+    let statRows = DATA.slice(); // all statuses
+    if (typeFilter !== "all") statRows = statRows.filter(r => r.type === typeFilter);
+    const neg = statRows.filter(r => effQty(r) < 0).length;
+    const zero = statRows.filter(r => effQty(r) === 0).length;
+    const low = statRows.filter(r => effQty(r) >= 1 && effQty(r) <= LOW_THRESHOLD).length;
+    const totalUnits = statRows.reduce((s, r) => s + (effQty(r) > 0 ? effQty(r) : 0), 0);
     const locLabel = document.getElementById("locationFilter").value;
     const unitsLabel = locLabel === "all" ? "Units (all loc.)" : "Units here";
     document.getElementById("stats").innerHTML = `
-      <div class="card"><div class="n">${activeRows.length}</div><div class="l">Active SKUs</div></div>
+      <div class="card"><div class="n">${statRows.length}</div><div class="l">SKUs</div></div>
       <div class="card bad"><div class="n">${neg}</div><div class="l">Negative stock</div></div>
       <div class="card warn"><div class="n">${zero}</div><div class="l">Out of stock</div></div>
       <div class="card warn"><div class="n">${low}</div><div class="l">Low (1–${LOW_THRESHOLD})</div></div>
@@ -412,7 +436,7 @@
       html += `<td>${r.image ? `<img class="thumb" src="${r.image}" loading="lazy" />` : `<div class="thumb"></div>`}</td>`;
       html += `<td>${escapeHtml(r.product)} ${r.status !== "ACTIVE" ? `<span class="status-chip">· ${r.status.toLowerCase()}</span>` : ""}</td>`;
       html += `<td class="muted">${escapeHtml(r.variant)}</td>`;
-      html += `<td class="qty">${isWestMode ? effQty(r) : stockPill(effQty(r))}</td>`;
+      html += `<td class="qty">${stockPill(effQty(r))}</td>`;
       html += "</tr>";
     }
     html += "</tbody></table>";

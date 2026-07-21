@@ -253,9 +253,68 @@
             color: #0d47a1;
             line-height: 1.6;
         }
+        /* ---- Hamburger menu ---- */
+        .menu-btn {
+            position: fixed; top: 14px; left: 14px; z-index: 30;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 8px; padding: 9px 10px; cursor: pointer;
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .menu-btn span { display: block; width: 22px; height: 3px; background: #fff; border-radius: 2px; }
+        #menuOverlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; display: none; }
+        #sideMenu {
+            position: fixed; top: 0; left: -290px; width: 280px; height: 100vh;
+            background: #171a21; border-right: 1px solid #2a2f3a; z-index: 50;
+            transition: left .25s ease; display: flex; flex-direction: column; padding: 18px 0;
+            overflow-y: auto;
+        }
+        #sideMenu.open { left: 0; }
+        #sideMenu .menu-logo { padding: 4px 20px 16px; border-bottom: 1px solid #2a2f3a; }
+        #sideMenu .menu-logo img { height: 26px; }
+        #sideMenu .menu-title {
+            font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #9aa3b2;
+            padding: 18px 20px 8px; text-transform: uppercase;
+        }
+        #sideMenu a, #sideMenu button.menu-item {
+            display: block; width: 100%; text-align: left; background: none; border: none;
+            color: #e7e9ee; font: inherit; font-size: 15px; font-weight: 600;
+            padding: 12px 20px; cursor: pointer; text-decoration: none;
+        }
+        #sideMenu a:hover, #sideMenu button.menu-item:hover { background: #1e222b; color: #4f8cff; }
+        #sideMenu .submenu a { padding-left: 34px; font-weight: 500; font-size: 14px; }
+        #sideMenu .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; }
     </style>
 </head>
 <body>
+    <!-- Slide-in menu -->
+    <div id="menuOverlay" onclick="closeMenu()"></div>
+    <nav id="sideMenu">
+        <div class="menu-logo">
+            <img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" />
+        </div>
+        <div class="menu-title">Inventory</div>
+        <a href="/?loc=ULTRAFIT%20NORTH%20USA"><span class="dot" style="background:#79BC29"></span>NORTH INVENTORY</a>
+        <a href="/?loc=ULTRAFIT%20SOUTH"><span class="dot" style="background:#1B75BB"></span>SOUTH INVENTORY</a>
+        <a href="/?loc=ULTRAFIT%20WEST"><span class="dot" style="background:#ED741B"></span>WEST INVENTORY</a>
+        <button class="menu-item" onclick="alert('Texas inventory is coming soon!')"><span class="dot" style="background:#5BC7F0"></span>TEXAS INVENTORY</button>
+        <div class="menu-title">TintPros</div>
+        <div class="submenu">
+            <a href="/TPTINTCHECKOUT.html">Tint Checkout</a>
+            <a href="/TP-PPFCHECKOUT.html">PPF Checkout</a>
+        </div>
+    </nav>
+    <button class="menu-btn" onclick="openMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
+    <script>
+        function openMenu() {
+            document.getElementById("sideMenu").classList.add("open");
+            document.getElementById("menuOverlay").style.display = "block";
+        }
+        function closeMenu() {
+            document.getElementById("sideMenu").classList.remove("open");
+            document.getElementById("menuOverlay").style.display = "none";
+        }
+    </script>
+
     <div class="container">
         <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 2px solid #e0e0e0;">
             <img src="https://www.tintprosmobile.com/wp-content/uploads/2026/03/cropped-Tint-Pros-Platinum-Auto-Wraps-2021-Logo-Black-e1622686350565-300x72-1.webp" alt="Tint Pros Logo" style="max-height: 60px; width: auto;">
