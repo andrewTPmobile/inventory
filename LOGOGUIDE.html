@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>ULTRAFIT — Logo Guide</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0F1734;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --line: #2a2f3a;
+    --text: #e7e9ee;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --blue: #165da3;
+    --orange: #ed741b;
+    --green: #79bc29;
+    --navy: #0f1734;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 18px 22px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 16px; background: var(--panel);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 10px; }
+  header h1 img { height: 30px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 22px 60px; }
+  h2 {
+    font-size: 24px; margin: 40px 0 8px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  h2:first-child { margin-top: 0; }
+  .lead { color: var(--muted); margin: 0 0 22px; max-width: 720px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px; margin-bottom: 18px;
+  }
+  .label { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; }
+  .logo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .logo-tile {
+    border-radius: 10px; padding: 24px; display: flex; align-items: center; justify-content: center;
+    min-height: 120px;
+  }
+  .logo-tile.light { background: #ffffff; }
+  .logo-tile.dark { background: var(--navy); border: 1px solid var(--line); }
+  .logo-tile img { max-width: 100%; max-height: 90px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0 4px; }
+  .swatch { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px 6px 6px; }
+  .swatch i { display: block; width: 26px; height: 26px; border-radius: 50%; }
+  .swatch b { font-size: 14px; }
+  .swatch span { color: var(--muted); font-size: 13px; }
+  .downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+  .downloads a {
+    display: inline-block; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 10px 14px; text-decoration: none; font-weight: 600; font-size: 14px;
+  }
+  .downloads a:hover { border-color: var(--accent); color: var(--accent); }
+  .csr img { width: 100%; border-radius: 10px; margin-top: 12px; }
+  .donts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .dont { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; text-align: center; }
+  .dont img { max-width: 100%; border-radius: 6px; background: #fff; }
+  .dont p { margin: 10px 0 0; font-weight: 600; font-size: 14px; }
+  .fineprint { color: var(--muted); font-size: 13px; margin-top: 18px; max-width: 860px; }
+  .copyright { color: var(--muted); font-size: 12px; text-align: center; margin-top: 40px; letter-spacing: 1px; }
+
+  /* ---- Hamburger menu ---- */
+  .menu-btn {
+    background: none; border: none; padding: 6px 8px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .menu-btn span { display: block; width: 24px; height: 3px; background: var(--text); border-radius: 2px; }
+  .menu-btn:hover span { background: var(--accent); }
+  #menuOverlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; display: none; }
+  #sideMenu {
+    position: fixed; top: 0; left: -290px; width: 280px; height: 100vh;
+    background: var(--panel); border-right: 1px solid var(--line); z-index: 50;
+    transition: left .25s ease; display: flex; flex-direction: column; padding: 18px 0;
+    overflow-y: auto;
+  }
+  #sideMenu.open { left: 0; }
+  #sideMenu .menu-logo { padding: 4px 20px 16px; border-bottom: 1px solid var(--line); }
+  #sideMenu .menu-logo img { height: 26px; }
+  #sideMenu .menu-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted);
+    padding: 18px 20px 8px; text-transform: uppercase;
+  }
+  #sideMenu a, #sideMenu button.menu-item {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    color: var(--text); font: inherit; font-size: 15px; font-weight: 600;
+    padding: 12px 20px; cursor: pointer; text-decoration: none;
+  }
+  #sideMenu a:hover, #sideMenu button.menu-item:hover { background: var(--panel-2); color: var(--accent); }
+  #sideMenu .submenu a { padding-left: 34px; font-weight: 500; font-size: 14px; }
+  #sideMenu .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; }
+</style>
+</head>
+<body>
+
+<!-- Slide-in menu -->
+<div id="menuOverlay" onclick="closeMenu()"></div>
+<nav id="sideMenu">
+  <div class="menu-logo">
+    <img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" />
+  </div>
+  <div class="menu-title">Inventory</div>
+  <a href="/?loc=ULTRAFIT%20NORTH%20USA"><span class="dot" style="background:#79BC29"></span>NORTH INVENTORY</a>
+  <a href="/?loc=ULTRAFIT%20SOUTH"><span class="dot" style="background:#1B75BB"></span>SOUTH INVENTORY</a>
+  <a href="/?loc=ULTRAFIT%20WEST"><span class="dot" style="background:#ED741B"></span>WEST INVENTORY</a>
+  <button class="menu-item" onclick="alert('Texas inventory is coming soon!')"><span class="dot" style="background:#5BC7F0"></span>TEXAS INVENTORY</button>
+  <div class="menu-title">TintPros</div>
+  <div class="submenu">
+    <a href="/TPTINTCHECKOUT.html">Tint Checkout</a>
+    <a href="/TP-PPFCHECKOUT.html">PPF Checkout</a>
+  </div>
+  <div class="menu-title">Brand</div>
+  <div class="submenu">
+    <a href="/LOGOGUIDE.html">Logo Guide</a>
+    <a href="/3DVIRTUALIZER.html">3D Virtualizer</a>
+  </div>
+</nav>
+
+<header>
+  <button class="menu-btn" onclick="openMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <h1><img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" /> Logo Guide</h1>
+</header>
+
+<div class="wrap">
+
+  <h2>ULTRAFIT Logo</h2>
+  <p class="lead">
+    It represents our commitment to innovation, precision, and protection.
+    The hexagonal emblem symbolizes structural strength and balance, while the dynamic lettering
+    reflects the brand's forward-driven spirit. Together, they express ULTRAFIT's identity as a
+    trusted leader in automotive protection.<br><br>
+    <strong>The logo must not be altered under any circumstances.</strong>
+    Please follow the guidelines on this page when using the ULTRAFIT logo.
+  </p>
+
+  <div class="card">
+    <div class="label">Horizontal</div>
+    <div class="logo-grid">
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_horizontal.png" alt="ULTRAFIT horizontal logo"></div>
+    </div>
+    <div class="label" style="margin-top:18px;">Vertical</div>
+    <div class="logo-grid">
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_vertical.png" alt="ULTRAFIT vertical logo"></div>
+    </div>
+  </div>
+
+  <h2>Color Variations</h2>
+  <p class="lead">See how each brand color is applied to the ULTRAFIT logo.</p>
+
+  <div class="swatches">
+    <div class="swatch"><i style="background:#165da3"></i><b>Main Blue</b><span>#165DA3</span></div>
+    <div class="swatch"><i style="background:#ed741b"></i><b>Sub Orange</b><span>#ED741B</span></div>
+    <div class="swatch"><i style="background:#79bc29"></i><b>Sub Green</b><span>#79BC29</span></div>
+    <div class="swatch"><i style="background:#0f1734; border:1px solid #2a2f3a"></i><b>Navy</b><span>#0F1734</span></div>
+  </div>
+
+  <div class="card">
+    <div class="label">Horizontal Version</div>
+    <div class="logo-grid">
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_h_blue.png" alt="Horizontal blue"></div>
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_h_orange.png" alt="Horizontal orange"></div>
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_h_green.png" alt="Horizontal green"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Vertical Version</div>
+    <div class="logo-grid">
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_v_blue.png" alt="Vertical blue"></div>
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_v_orange.png" alt="Vertical orange"></div>
+      <div class="logo-tile light"><img src="https://www.ultrafitprotection.com/images/content/logo_v_green.png" alt="Vertical green"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Navy &amp; White Version — Horizontal</div>
+    <div class="logo-grid">
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_h_blue_w.png" alt="Horizontal blue on navy"></div>
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_h_orange_w.png" alt="Horizontal orange on navy"></div>
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_h_green_w.png" alt="Horizontal green on navy"></div>
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_h_white_w.png" alt="Horizontal white on navy"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Navy &amp; White Version — Vertical</div>
+    <div class="logo-grid">
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_v_blue_w.png" alt="Vertical blue on navy"></div>
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_v_orange_w.png" alt="Vertical orange on navy"></div>
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_v_green_w.png" alt="Vertical green on navy"></div>
+      <div class="logo-tile dark"><img src="https://www.ultrafitprotection.com/images/content/logo_v_white_w.png" alt="Vertical white on navy"></div>
+    </div>
+  </div>
+
+  <h2>Downloads</h2>
+  <p class="lead">Official logo files — always use these, never recreate the logo.</p>
+  <div class="downloads">
+    <a href="https://www.ultrafitprotection.com/images/file/Horizontal%20Logo(Colored)%20-%20PNG.zip">Horizontal Logo (Colored) — PNG</a>
+    <a href="https://www.ultrafitprotection.com/images/file/Horizontal%20Logo(White)%20-%20PNG.zip">Horizontal Logo (White) — PNG</a>
+    <a href="https://www.ultrafitprotection.com/images/file/Vertical%20Logo(Colored)%20-%20PNG.zip">Vertical Logo (Colored) — PNG</a>
+    <a href="https://www.ultrafitprotection.com/images/file/Vertical%20Logo(White)%20-%20PNG.zip">Vertical Logo (White) — PNG</a>
+    <a href="https://www.ultrafitprotection.com/images/file/Horizontal%20Logo(ALL)%20-%20SVG.svg">Horizontal Logo (All) — SVG</a>
+    <a href="https://www.ultrafitprotection.com/images/file/Vertical%20Logo(ALL)%20-%20SVG.svg">Vertical Logo (All) — SVG</a>
+  </div>
+
+  <h2>Clear Space Rule</h2>
+  <p class="lead">
+    The designated clear space must be kept free of any graphic or text elements to uphold
+    the integrity of the ULTRAFIT logo.
+  </p>
+  <div class="card csr">
+    <img src="https://www.ultrafitprotection.com/images/content/logo_csr_horizontal.jpg" alt="Clear space rule — horizontal">
+    <img src="https://www.ultrafitprotection.com/images/content/logo_csr_vertical.jpg" alt="Clear space rule — vertical">
+  </div>
+
+  <h2>Logo Don'ts</h2>
+  <p class="lead">Never modify the logo. The following uses are prohibited:</p>
+  <div class="donts">
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_01.png" alt=""><p>Don't crop — always use clear space.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_02.png" alt=""><p>Don't offset.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_03.png" alt=""><p>Don't use strokes or outlines.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_04.png" alt=""><p>Don't use gradients.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_05.png" alt=""><p>Don't invert.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_06.png" alt=""><p>Don't use pattern fills.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_07.png" alt=""><p>Don't distort, skew, rotate or tilt.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_08.png" alt=""><p>Don't use alternative colors.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_09.png" alt=""><p>Don't place the logo on a photo background.</p></div>
+    <div class="dont"><img src="https://www.ultrafitprotection.com/images/content/logo_dont_10.png" alt=""><p>Don't distort — always resize proportionally.</p></div>
+  </div>
+
+  <p class="fineprint">
+    To maintain the visual integrity of the ULTRAFIT brand, it is essential to use the logo exactly as provided.
+    The logo has been carefully designed to represent our identity, and any unauthorized modification can dilute
+    its impact. Users must strictly refrain from distorting, skewing, or stretching the logo. Never crowd the logo;
+    always ensure there is sufficient clear space around it to maximize visibility and recognition. Stylistic
+    alterations such as drop shadows, gradients, outlines, or special effects are strictly prohibited. Do not change
+    the logo's color to unauthorized shades or place it on cluttered backgrounds that compromise legibility.
+    The relationships between the elements are fixed and should never be rearranged or resized independently.
+  </p>
+
+  <div class="copyright">COPYRIGHT 2025. ULTRAFIT ALL RIGHTS RESERVED.</div>
+</div>
+
+<script>
+  function openMenu() {
+    document.getElementById("sideMenu").classList.add("open");
+    document.getElementById("menuOverlay").style.display = "block";
+  }
+  function closeMenu() {
+    document.getElementById("sideMenu").classList.remove("open");
+    document.getElementById("menuOverlay").style.display = "none";
+  }
+</script>
+</body>
+</html>
