@@ -4,10 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>ULTRAFIT USA — Portal</title>
+<title>ULTRAFIT — Product Information</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,32 +21,21 @@
     --blue: #165da3;
     --orange: #ed741b;
     --green: #79bc29;
-    --tx: #5bc7f0;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.5 'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    min-height: 100vh;
   }
   header {
     padding: 18px 22px; border-bottom: 1px solid var(--line);
     display: flex; align-items: center; gap: 16px; background: var(--panel);
     position: sticky; top: 0; z-index: 5;
   }
-  header img.logo { height: 30px; }
-  .spacer { flex: 1; }
-
-  .hero {
-    text-align: center; padding: 56px 22px 26px;
-  }
-  .hero img { height: 64px; max-width: 80%; }
-  .hero h1 {
-    margin: 22px 0 6px; font-size: 34px; letter-spacing: 1px; text-transform: uppercase;
-  }
-  .hero p { color: var(--muted); margin: 0; font-size: 17px; }
-
-  .wrap { max-width: 1050px; margin: 0 auto; padding: 18px 22px 60px; }
+  header h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 10px; }
+  header h1 img { height: 30px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 22px 60px; }
+  .lead { color: var(--muted); margin: 0 0 26px; max-width: 720px; }
   .section-label {
     font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted);
     text-transform: uppercase; margin: 30px 0 12px; padding-left: 4px;
@@ -57,30 +44,15 @@
   .tile {
     display: block; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
     padding: 22px 20px; text-decoration: none; color: var(--text);
-    transition: transform .15s ease, border-color .15s ease;
-    position: relative; overflow: hidden;
+    transition: transform .15s ease, border-color .15s ease; position: relative; overflow: hidden;
   }
   .tile:hover { transform: translateY(-3px); border-color: var(--accent); }
   .tile .icon {
     width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center;
-    justify-content: center; font-size: 22px; margin-bottom: 14px;
+    justify-content: center; font-size: 22px; margin-bottom: 14px; background: rgba(79,140,255,.15);
   }
-  .tile img.map {
-    display: block; width: 100%; height: 130px; object-fit: contain; margin-bottom: 14px;
-  }
-  .tile h3 { margin: 0 0 4px; font-size: 18px; letter-spacing: .3px; }
+  .tile h3 { margin: 0 0 4px; font-size: 18px; }
   .tile p { margin: 0; color: var(--muted); font-size: 14px; }
-  .tile .bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; }
-  .tile.disabled { opacity: .6; cursor: pointer; }
-  .badge {
-    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .5px;
-    background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
-    border-radius: 5px; padding: 2px 7px; margin-left: 8px; vertical-align: middle;
-  }
-  footer {
-    text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 1px;
-    padding: 26px 22px 34px; border-top: 1px solid var(--line);
-  }
 
   /* ---- Hamburger menu ---- */
   .menu-btn {
@@ -142,84 +114,65 @@
 
 <header>
   <button class="menu-btn" onclick="openMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
-  <img class="logo" src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" />
-  <div class="spacer"></div>
+  <h1><img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" /> Product Information</h1>
 </header>
-
-<div class="hero">
-  <img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT USA" />
-  <h1>ULTRAFIT USA Portal</h1>
-  <p>Live inventory, checkouts, and brand tools — all in one place.</p>
-</div>
 
 <div class="wrap">
 
-  <div class="section-label">Inventory</div>
+  <p class="lead">
+    Official ULTRAFIT product resources — data sheets, warranty, care, and installation guides.
+    Files added to this folder can also be linked here.
+  </p>
+
+  <div class="section-label">Official Resources</div>
   <div class="grid">
-    <a class="tile" href="/INVENTORY.html?loc=ULTRAFIT%20NORTH%20USA">
-      <div class="bar" style="background:var(--green)"></div>
-      <img class="map" src="https://cdn.shopify.com/s/files/1/0708/9097/9548/files/north-map-768x768.png?v=1784629606" alt="North region"
-           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(121,188,41,.15)&quot;>📦</div>'">
-      <h3>North Inventory</h3>
-      <p>Live stock at ULTRAFIT North USA — Minneapolis, MN</p>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/help/data_sheet.php" target="_blank" rel="noopener">
+      <div class="icon">📄</div>
+      <h3>Data Sheets</h3>
+      <p>Technical specifications for every ULTRAFIT film</p>
     </a>
-    <a class="tile" href="/INVENTORY.html?loc=ULTRAFIT%20SOUTH">
-      <div class="bar" style="background:#1B75BB"></div>
-      <img class="map" src="https://cdn.shopify.com/s/files/1/0708/9097/9548/files/south-map-768x768.png?v=1784629607" alt="South region"
-           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(27,117,187,.15)&quot;>📦</div>'">
-      <h3>South Inventory</h3>
-      <p>Live stock at ULTRAFIT South — Houston, TX</p>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/help/warranty.php" target="_blank" rel="noopener">
+      <div class="icon">🛡️</div>
+      <h3>Warranty</h3>
+      <p>Coverage details and warranty registration</p>
     </a>
-    <a class="tile" href="/INVENTORY.html?loc=ULTRAFIT%20WEST">
-      <div class="bar" style="background:var(--orange)"></div>
-      <img class="map" src="https://cdn.shopify.com/s/files/1/0708/9097/9548/files/west-map-768x768.png?v=1784629606" alt="West region"
-           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(237,116,27,.15)&quot;>📦</div>'">
-      <h3>West Inventory</h3>
-      <p>Live stock at ULTRAFIT West</p>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/help/product_care.php" target="_blank" rel="noopener">
+      <div class="icon">🧼</div>
+      <h3>Product Care</h3>
+      <p>How to care for installed film</p>
     </a>
-    <a class="tile disabled" href="javascript:alert('Texas inventory is coming soon!')">
-      <div class="bar" style="background:var(--tx)"></div>
-      <img class="map" src="https://cdn.shopify.com/s/files/1/0708/9097/9548/files/region_texas.png?v=1784629704" alt="Texas region"
-           onerror="this.outerHTML='<div class=&quot;icon&quot; style=&quot;background:rgba(91,199,240,.15)&quot;>📦</div>'">
-      <h3>Texas Inventory <span class="badge">COMING SOON</span></h3>
-      <p>ULTRAFIT Texas — Keller, TX</p>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/help/installation.php" target="_blank" rel="noopener">
+      <div class="icon">🔧</div>
+      <h3>Installation Instructions</h3>
+      <p>Official installation guidance</p>
     </a>
   </div>
 
-  <div class="grid" style="margin-top:14px;">
-    <a class="tile" href="/TPTINTCHECKOUT.html">
-      <div class="bar" style="background:var(--accent)"></div>
-      <div class="icon" style="background:rgba(79,140,255,.15)">🎬</div>
-      <h3>Tint Checkout</h3>
-      <p>Check out window tint rolls — logs the roll, photo, and updates Shopify automatically</p>
-    </a>
-    <a class="tile" href="/TP-PPFCHECKOUT.html">
-      <div class="bar" style="background:var(--accent)"></div>
-      <div class="icon" style="background:rgba(79,140,255,.15)">🛡️</div>
-      <h3>PPF Checkout</h3>
-      <p>Check out paint protection film rolls — full XP collection and WinCrest EVO</p>
-    </a>
-  </div>
-
-  <div class="section-label">Brand & Tools</div>
+  <div class="section-label">Product Lines</div>
   <div class="grid">
-    <a class="tile" href="/3DVIRTUALIZER.html">
-      <div class="bar" style="background:var(--blue)"></div>
-      <div class="icon" style="background:rgba(22,93,163,.2)">🚗</div>
-      <h3>3D Virtualizer</h3>
-      <p>Preview ULTRAFIT films on a 3D vehicle in real time</p>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/pf/ppf/overview.php" target="_blank" rel="noopener">
+      <div class="icon">🚗</div>
+      <h3>Paint Protection Film</h3>
+      <p>XP collection overview and all PPF products</p>
     </a>
-    <a class="tile" href="/LOGOGUIDE.html">
-      <div class="bar" style="background:var(--blue)"></div>
-      <div class="icon" style="background:rgba(22,93,163,.2)">🎨</div>
-      <h3>Logo Guide</h3>
-      <p>Official ULTRAFIT logos, brand colors, downloads, and usage rules</p>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/pf/wpf/overview.php" target="_blank" rel="noopener">
+      <div class="icon">🪟</div>
+      <h3>Windshield Protection Film</h3>
+      <p>WinCrest windshield protection overview</p>
+    </a>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/wf/awf/overview.php" target="_blank" rel="noopener">
+      <div class="icon">🌤️</div>
+      <h3>Window Film</h3>
+      <p>Vivid Series automotive window tint overview</p>
+    </a>
+    <a class="tile" href="https://www.ultrafitprotection.com/en/pf/spf/overview.php" target="_blank" rel="noopener">
+      <div class="icon">🖥️</div>
+      <h3>Surface Protection Film</h3>
+      <p>SPF overview and products</p>
     </a>
   </div>
 
 </div>
-
-<footer>ULTRAFIT USA · 1313 Osborne Rd NE, Minneapolis, MN 55432</footer>
 
 <script>
   function openMenu() {
