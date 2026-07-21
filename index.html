@@ -132,18 +132,11 @@
 </header>
 <div class="stats" id="stats"></div>
 <div class="toolbar">
-  <div class="field">
-    <label for="sourceFilter">Data Source</label>
-    <select id="sourceFilter" onchange="changeSource()">
-      <option value="shopify">Shopify (All Locations)</option>
-      <option value="google">Google Sheets (WEST USA)</option>
-    </select>
-  </div>
   <div class="field" style="flex:1;max-width:380px;min-width:240px;">
     <label for="search">Search</label>
     <input type="search" id="search" placeholder="Product, SKU, vendor, type…" oninput="render()" />
   </div>
-  <div class="field" id="locationField">
+  <div class="field">
     <label for="locationFilter">Location</label>
     <select id="locationFilter" onchange="render()">
       <option value="all">All locations</option>
@@ -182,12 +175,10 @@
   const LOW_THRESHOLD = 5;
   const DEFAULT_LOCATION = "ULTRAFIT NORTH USA";
   const DEFAULT_TYPE = "CLEAR PPF";
-
   let firstLoad = true;
   let DATA = [];
   let sortKey = "qty";
   let sortAsc = false;
-  let currentSource = "shopify"; // "shopify" or "google"
 
   function fmtMoney(n) {
     if (n === null || n === undefined) return "";
@@ -207,28 +198,11 @@
     return (r.byLoc && typeof r.byLoc[loc] === "number") ? r.byLoc[loc] : 0;
   }
 
-  function changeSource() {
-    const newSource = document.getElementById("sourceFilter").value;
-    if (newSource !== currentSource) {
-      currentSource = newSource;
-      // Reset filters
-      document.getElementById("locationFilter").value = "all";
-      document.getElementById("typeFilter").value = "all";
-      document.getElementById("filter").value = "all";
-      document.getElementById("statusFilter").value = "active";
-      document.getElementById("search").value = "";
-      loadData();
-    }
-  }
-
   async function loadData() {
     document.getElementById("err").textContent = "";
     document.getElementById("tableHost").innerHTML = '<div class="loading">Loading inventory…</div>';
-
-    const endpoint = currentSource === "shopify" ? "/api/inventory" : "/api/inventory-west";
-
     try {
-      const r = await fetch(endpoint);
+      const r = await fetch("/api/inventory");
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j.error || ("HTTP " + r.status));
@@ -248,20 +222,10 @@
 
   function populateFilters(locations) {
     const locSel = document.getElementById("locationFilter");
-    const locationField = document.getElementById("locationField");
-
-    // Hide location filter if only one location (Google Sheets)
-    if (locations.length === 1) {
-      locationField.style.display = "none";
-    } else {
-      locationField.style.display = "flex";
-    }
-
     const prevLoc = firstLoad ? DEFAULT_LOCATION : locSel.value;
     locSel.innerHTML = '<option value="all">All locations</option>' +
       locations.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
     if ([...locSel.options].some(o => o.value === prevLoc)) locSel.value = prevLoc;
-
     const types = Array.from(new Set(DATA.map(r => r.type).filter(Boolean))).sort();
     const typeSel = document.getElementById("typeFilter");
     const prevType = firstLoad ? DEFAULT_TYPE : typeSel.value;
