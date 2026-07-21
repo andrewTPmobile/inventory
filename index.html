@@ -88,14 +88,15 @@
   tbody tr:hover { background: var(--panel-2); }
   td.qty { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; }
   td.price { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-  .west-mode .toolbar .field:not(#searchField) { display: none; }
-  .west-mode th:nth-child(1), .west-mode td:nth-child(1),
-  .west-mode th:nth-child(3), .west-mode td:nth-child(3),
-  .west-mode th:nth-child(4), .west-mode td:nth-child(4),
-  .west-mode th:nth-child(5), .west-mode td:nth-child(5) {
+  #toolbar.west-mode .field { display: none; }
+  #toolbar.west-mode #searchField { display: flex; }
+  #tableHost.west-mode th:nth-child(1), #tableHost.west-mode td:nth-child(1),
+  #tableHost.west-mode th:nth-child(3), #tableHost.west-mode td:nth-child(3),
+  #tableHost.west-mode th:nth-child(4), #tableHost.west-mode td:nth-child(4),
+  #tableHost.west-mode th:nth-child(5), #tableHost.west-mode td:nth-child(5) {
     display: none;
   }
-  .west-mode td.qty { font-size: 24px; padding: 14px 12px; }
+  #tableHost.west-mode td.qty { font-size: 24px; padding: 14px 12px; }
   .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
   .pill.ok { background: rgba(47,191,113,.15); color: var(--ok); }
   .pill.warn { background: rgba(224,168,61,.15); color: var(--warn); }
