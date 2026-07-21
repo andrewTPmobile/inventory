@@ -31,21 +31,13 @@
   }
   header h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 10px; }
   header h1 img { height: 30px; }
-  .launch {
-    max-width: 640px; margin: 10vh auto 0; padding: 0 22px; text-align: center;
+  .embed-container {
+    max-width: 1100px; margin: 24px auto; padding: 0 22px;
   }
-  .launch .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
-    padding: 44px 32px;
+  .embed-container iframe {
+    width: 100%; height: calc(100vh - 160px); min-height: 600px;
+    border: 1px solid var(--line); border-radius: 14px; background: #fff;
   }
-  .launch h2 { margin: 0 0 10px; font-size: 26px; }
-  .launch p { color: var(--muted); margin: 0 0 26px; }
-  .launch a.go {
-    display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
-    font-weight: 700; font-size: 17px; padding: 14px 34px; border-radius: 10px;
-  }
-  .launch a.go:hover { filter: brightness(1.1); }
-  .launch .hint { font-size: 12px; color: var(--muted); margin-top: 16px; }
 
   /* ---- Hamburger menu ---- */
   .menu-btn {
@@ -108,14 +100,13 @@
   <h1><img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" /> 3D Virtualizer</h1>
 </header>
 
-<div class="launch">
-  <div class="card">
-    <img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" style="height:36px;margin-bottom:22px;" />
-    <h2>3D Virtualizer</h2>
-    <p>Preview ULTRAFIT films on a 3D vehicle — colors, finishes, and coverage in real time.</p>
-    <a class="go" href="https://staging.rm.viscircle.com/embed/workspaces/ultrafit">Open 3D Virtualizer</a>
-    <div class="hint">Use your browser's back button to return.</div>
-  </div>
+<div class="embed-container">
+  <iframe
+    src="https://app.urable.com/three-d-external-visualizer/R5H0xDMspa0QssZ8QOSj"
+    scrolling="no"
+    frameborder="0"
+    allow="autoplay; fullscreen"
+    allowfullscreen></iframe>
 </div>
 
 <script>
