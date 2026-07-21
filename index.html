@@ -89,15 +89,16 @@
   th.sorted::after { content: " \25BE"; color: var(--accent); }
   th.sorted.asc::after { content: " \25B4"; }
   tbody tr:hover { background: var(--panel-2); }
-  td.qty { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; font-size: 24px; }
+  td.qty { font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; font-size: 24px; }
+  th:last-child { text-align: center; }
   td.price { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   #toolbar.west-mode .field { display: none; }
   #toolbar.west-mode #searchField { display: flex; }
   #toolbar.west-mode .field:has(#locationFilter) { display: flex; }
+  /* West mode: product name already includes the size, so show Product + Qty only
+     (columns are: 1 image, 2 product, 3 variant, 4 qty) */
   #tableHost.west-mode th:nth-child(1), #tableHost.west-mode td:nth-child(1),
-  #tableHost.west-mode th:nth-child(3), #tableHost.west-mode td:nth-child(3),
-  #tableHost.west-mode th:nth-child(4), #tableHost.west-mode td:nth-child(4),
-  #tableHost.west-mode th:nth-child(5), #tableHost.west-mode td:nth-child(5) {
+  #tableHost.west-mode th:nth-child(3), #tableHost.west-mode td:nth-child(3) {
     display: none;
   }
   #tableHost.west-mode td.qty { font-size: 24px; padding: 14px 12px; }
