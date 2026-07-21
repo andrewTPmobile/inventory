@@ -240,7 +240,17 @@
     const filter = document.getElementById("filter").value;
     const statusFilter = document.getElementById("statusFilter").value;
     const typeFilter = document.getElementById("typeFilter").value;
+    const locFilter = document.getElementById("locationFilter").value;
     let rows = DATA.slice();
+
+    // When filtering by ULTRAFIT WEST, show only Google Sheets items
+    if (locFilter === "ULTRAFIT WEST") {
+      rows = rows.filter(r => r.source === "google");
+    } else if (locFilter !== "all") {
+      // For other Shopify locations, show only Shopify items
+      rows = rows.filter(r => r.source === "shopify");
+    }
+
     if (statusFilter === "active") rows = rows.filter(r => r.status === "ACTIVE");
     if (typeFilter !== "all") rows = rows.filter(r => r.type === typeFilter);
     if (filter === "neg") rows = rows.filter(r => effQty(r) < 0);
