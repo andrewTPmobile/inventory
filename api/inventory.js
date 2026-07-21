@@ -120,6 +120,7 @@ async function fetchShopifyInventory() {
           byLoc: byLoc,
           qty: total,
           image: p.featuredImage ? p.featuredImage.url : null,
+          source: "shopify", // Mark as Shopify data
         });
       }
     }
@@ -188,6 +189,7 @@ async function fetchGoogleSheetsInventory() {
         byLoc: { "ULTRAFIT WEST": qty },
         qty: qty,
         image: null,
+        source: "google", // Mark as Google Sheets data
       });
     }
 
