@@ -216,9 +216,15 @@
     </select>
   </div>
   <div class="field">
-    <label for="variantFilter">Variant</label>
-    <select id="variantFilter" onchange="render()">
-      <option value="all">All variants</option>
+    <label for="vltFilter">VLT</label>
+    <select id="vltFilter" onchange="render()">
+      <option value="all">All VLT</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="sizeFilter">Size</label>
+    <select id="sizeFilter" onchange="render()">
+      <option value="all">All sizes</option>
     </select>
   </div>
   <span class="muted" id="rowcount"></span>
@@ -242,7 +248,8 @@
     const locSel = document.getElementById("locationFilter");
     if ([...locSel.options].some(o => o.value === loc)) locSel.value = loc;
     document.getElementById("typeFilter").value = "all";
-    document.getElementById("variantFilter").value = "all";
+    document.getElementById("vltFilter").value = "all";
+    document.getElementById("sizeFilter").value = "all";
     document.getElementById("search").value = "";
     closeMenu();
     render();
@@ -339,23 +346,61 @@
     firstLoad = false;
   }
 
-  // Variant dropdown follows the selected type (falls back to all variants)
+  // Split a variant title into { vlt, size }.
+  // Tint variants look like "15 / 60\" x 100ft" (VLT / size);
+  // everything else's variant IS the size (e.g. "60\" x 60ft").
+  function splitVariant(v) {
+    const s = String(v || "");
+    const i = s.indexOf("/");
+    if (i > -1 && /^\s*\d+\s*$/.test(s.slice(0, i))) {
+      return { vlt: s.slice(0, i).trim(), size: normSize(s.slice(i + 1)) };
+    }
+    return { vlt: null, size: normSize(s) };
+  }
+  function normSize(s) {
+    return String(s || "")
+      .replace(/×/g, "x")
+      .replace(/\s*[xX]\s*/g, " x ")
+      .replace(/(\d)\s*ft\b/gi, "$1ft")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // VLT + Size dropdowns follow the selected type
   function populateVariantFilter() {
     const typeSel = document.getElementById("typeFilter");
-    const varSel = document.getElementById("variantFilter");
-    const prevVar = varSel.value || "all";
+    const vltSel = document.getElementById("vltFilter");
+    const sizeSel = document.getElementById("sizeFilter");
+    const prevVlt = vltSel.value || "all";
+    const prevSize = sizeSel.value || "all";
+
     let rows = DATA;
     if (typeSel.value !== "all") rows = rows.filter(r => r.type === typeSel.value);
-    const variants = Array.from(new Set(rows.map(r => r.variant).filter(Boolean))).sort();
-    varSel.innerHTML = '<option value="all">All variants</option>' +
-      variants.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
-    if ([...varSel.options].some(o => o.value === prevVar)) varSel.value = prevVar;
+
+    const vlts = new Set(), sizes = new Set();
+    rows.forEach(r => {
+      const p = splitVariant(r.variant);
+      if (p.vlt) vlts.add(p.vlt);
+      if (p.size) sizes.add(p.size);
+    });
+
+    const vltList = Array.from(vlts).sort((a, b) => Number(a) - Number(b));
+    const sizeList = Array.from(sizes).sort();
+
+    vltSel.innerHTML = '<option value="all">All VLT</option>' +
+      vltList.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    if ([...vltSel.options].some(o => o.value === prevVlt)) vltSel.value = prevVlt;
+
+    sizeSel.innerHTML = '<option value="all">All sizes</option>' +
+      sizeList.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    if ([...sizeSel.options].some(o => o.value === prevSize)) sizeSel.value = prevSize;
   }
 
   function currentRows() {
     const q = document.getElementById("search").value.trim().toLowerCase();
     const typeFilter = document.getElementById("typeFilter").value;
-    const variantFilter = document.getElementById("variantFilter").value;
+    const vltFilter = document.getElementById("vltFilter").value;
+    const sizeFilter = document.getElementById("sizeFilter").value;
     const locFilter = document.getElementById("locationFilter").value;
     let rows = DATA.slice();
 
@@ -370,7 +415,8 @@
       }
       // All stock levels and all statuses are always shown
       if (typeFilter !== "all") rows = rows.filter(r => r.type === typeFilter);
-      if (variantFilter !== "all") rows = rows.filter(r => r.variant === variantFilter);
+      if (vltFilter !== "all") rows = rows.filter(r => splitVariant(r.variant).vlt === vltFilter);
+      if (sizeFilter !== "all") rows = rows.filter(r => splitVariant(r.variant).size === sizeFilter);
     }
 
     if (q) {
