@@ -89,7 +89,7 @@
   th.sorted::after { content: " \25BE"; color: var(--accent); }
   th.sorted.asc::after { content: " \25B4"; }
   tbody tr:hover { background: var(--panel-2); }
-  td.qty { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; }
+  td.qty { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; font-size: 24px; }
   td.price { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   #toolbar.west-mode .field { display: none; }
   #toolbar.west-mode #searchField { display: flex; }
@@ -101,7 +101,7 @@
     display: none;
   }
   #tableHost.west-mode td.qty { font-size: 24px; padding: 14px 12px; }
-  .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill { padding: 4px 12px; border-radius: 999px; font-size: 18px; font-weight: 700; }
   .pill.ok { background: rgba(47,191,113,.15); color: var(--ok); }
   .pill.warn { background: rgba(224,168,61,.15); color: var(--warn); }
   .pill.bad { background: rgba(229,72,77,.15); color: var(--bad); }
@@ -127,17 +127,70 @@
     #tableHost { overflow-x: auto; }
     th { position: static; }
     th, td { padding: 10px 8px; }
-    th:nth-child(1), td:nth-child(1),
-    th:nth-child(3), td:nth-child(3),
-    th:nth-child(5), td:nth-child(5) {
+    /* hide only the image column on phones (columns: image, product, variant, qty) */
+    th:nth-child(1), td:nth-child(1) {
       display: none;
     }
-    td.qty { font-size: 15px; }
+    td.qty { font-size: 20px; }
   }
+
+  /* ---- Hamburger menu ---- */
+  .menu-btn {
+    background: none; border: none; padding: 6px 8px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .menu-btn span { display: block; width: 24px; height: 3px; background: var(--text); border-radius: 2px; }
+  .menu-btn:hover span { background: var(--accent); }
+  #menuOverlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; display: none;
+  }
+  #sideMenu {
+    position: fixed; top: 0; left: -290px; width: 280px; height: 100vh;
+    background: var(--panel); border-right: 1px solid var(--line); z-index: 50;
+    transition: left .25s ease; display: flex; flex-direction: column; padding: 18px 0;
+    overflow-y: auto;
+  }
+  #sideMenu.open { left: 0; }
+  #sideMenu .menu-logo { padding: 4px 20px 16px; border-bottom: 1px solid var(--line); }
+  #sideMenu .menu-logo img { height: 26px; }
+  #sideMenu .menu-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted);
+    padding: 18px 20px 8px; text-transform: uppercase;
+  }
+  #sideMenu a, #sideMenu button.menu-item {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    color: var(--text); font: inherit; font-size: 15px; font-weight: 600;
+    padding: 12px 20px; cursor: pointer; text-decoration: none;
+  }
+  #sideMenu a:hover, #sideMenu button.menu-item:hover { background: var(--panel-2); color: var(--accent); }
+  #sideMenu .submenu a { padding-left: 34px; font-weight: 500; font-size: 14px; }
+  #sideMenu .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:10px; }
 </style>
 </head>
 <body>
+
+<!-- Slide-in menu -->
+<div id="menuOverlay" onclick="closeMenu()"></div>
+<nav id="sideMenu">
+  <div class="menu-logo">
+    <img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" />
+  </div>
+
+  <div class="menu-title">Inventory</div>
+  <button class="menu-item" onclick="goLocation('ULTRAFIT NORTH USA')"><span class="dot" style="background:#79BC29"></span>NORTH INVENTORY</button>
+  <button class="menu-item" onclick="goLocation('ULTRAFIT SOUTH')"><span class="dot" style="background:#1B75BB"></span>SOUTH INVENTORY</button>
+  <button class="menu-item" onclick="goLocation('ULTRAFIT WEST')"><span class="dot" style="background:#ED741B"></span>WEST INVENTORY</button>
+  <button class="menu-item" onclick="alert('Texas inventory is coming soon!')"><span class="dot" style="background:#5BC7F0"></span>TEXAS INVENTORY</button>
+
+  <div class="menu-title">TintPros</div>
+  <div class="submenu">
+    <a href="/TPTINTCHECKOUT.html">Tint Checkout</a>
+    <a href="/TP-PPFCHECKOUT.html">PPF Checkout</a>
+  </div>
+</nav>
+
 <header>
+  <button class="menu-btn" onclick="openMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
   <h1><img src="https://ultrafitppf.com/wp-content/uploads/2024/06/USA_White_logo.png" alt="ULTRAFIT" class="logo" /> Inventory</h1>
   <span class="sub" id="updated">—</span>
   <div class="spacer"></div>
@@ -185,6 +238,28 @@
 </div>
 <div id="err" style="padding:0 22px 30px;"></div>
 <script>
+  // ---- Hamburger menu ----
+  function openMenu() {
+    document.getElementById("sideMenu").classList.add("open");
+    document.getElementById("menuOverlay").style.display = "block";
+  }
+  function closeMenu() {
+    document.getElementById("sideMenu").classList.remove("open");
+    document.getElementById("menuOverlay").style.display = "none";
+  }
+  // Jump to a location with filters reset to show EVERYTHING there
+  function goLocation(loc) {
+    const locSel = document.getElementById("locationFilter");
+    if ([...locSel.options].some(o => o.value === loc)) locSel.value = loc;
+    document.getElementById("typeFilter").value = "all";
+    document.getElementById("filter").value = "all";
+    document.getElementById("statusFilter").value = "active";
+    document.getElementById("search").value = "";
+    closeMenu();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const LOW_THRESHOLD = 5;
   const DEFAULT_LOCATION = "ULTRAFIT NORTH USA";
   const DEFAULT_TYPE = "CLEAR PPF";
@@ -321,9 +396,7 @@
     const cols = [
       ["", "image"],
       ["Product", "product"],
-      ["Type", "type"],
       ["Variant", "variant"],
-      ["Price", "price"],
       ["Qty", "qty"],
     ];
     let html = "<table><thead><tr>";
@@ -337,9 +410,7 @@
       html += "<tr>";
       html += `<td>${r.image ? `<img class="thumb" src="${r.image}" loading="lazy" />` : `<div class="thumb"></div>`}</td>`;
       html += `<td>${escapeHtml(r.product)} ${r.status !== "ACTIVE" ? `<span class="status-chip">· ${r.status.toLowerCase()}</span>` : ""}</td>`;
-      html += `<td class="muted">${escapeHtml(r.type)}</td>`;
       html += `<td class="muted">${escapeHtml(r.variant)}</td>`;
-      html += `<td class="price">${fmtMoney(r.price)}</td>`;
       html += `<td class="qty">${isWestMode ? effQty(r) : stockPill(effQty(r))}</td>`;
       html += "</tr>";
     }
