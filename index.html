@@ -90,6 +90,7 @@
   td.price { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   #toolbar.west-mode .field { display: none; }
   #toolbar.west-mode #searchField { display: flex; }
+  #toolbar.west-mode .field:has(#locationFilter) { display: flex; }
   #tableHost.west-mode th:nth-child(1), #tableHost.west-mode td:nth-child(1),
   #tableHost.west-mode th:nth-child(3), #tableHost.west-mode td:nth-child(3),
   #tableHost.west-mode th:nth-child(4), #tableHost.west-mode td:nth-child(4),
@@ -255,17 +256,20 @@
     // When filtering by ULTRAFIT WEST, show only Google Sheets items
     if (locFilter === "ULTRAFIT WEST") {
       rows = rows.filter(r => r.source === "google");
-    } else if (locFilter !== "all") {
+      // For ULTRAFIT WEST, skip other filters and only apply search
+    } else {
       // For other Shopify locations, show only Shopify items
-      rows = rows.filter(r => r.source === "shopify");
+      if (locFilter !== "all") {
+        rows = rows.filter(r => r.source === "shopify");
+      }
+      if (statusFilter === "active") rows = rows.filter(r => r.status === "ACTIVE");
+      if (typeFilter !== "all") rows = rows.filter(r => r.type === typeFilter);
+      if (filter === "neg") rows = rows.filter(r => effQty(r) < 0);
+      else if (filter === "zero") rows = rows.filter(r => effQty(r) === 0);
+      else if (filter === "low") rows = rows.filter(r => effQty(r) >= 1 && effQty(r) <= LOW_THRESHOLD);
+      else if (filter === "in") rows = rows.filter(r => effQty(r) > 0);
     }
 
-    if (statusFilter === "active") rows = rows.filter(r => r.status === "ACTIVE");
-    if (typeFilter !== "all") rows = rows.filter(r => r.type === typeFilter);
-    if (filter === "neg") rows = rows.filter(r => effQty(r) < 0);
-    else if (filter === "zero") rows = rows.filter(r => effQty(r) === 0);
-    else if (filter === "low") rows = rows.filter(r => effQty(r) >= 1 && effQty(r) <= LOW_THRESHOLD);
-    else if (filter === "in") rows = rows.filter(r => effQty(r) > 0);
     if (q) {
       rows = rows.filter(r =>
         (r.product + " " + r.sku + " " + r.vendor + " " + r.type + " " + r.variant)
