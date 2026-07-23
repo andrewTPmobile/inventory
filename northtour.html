@@ -63,7 +63,8 @@
     border-radius: 10px;
     overflow: hidden;
   }
-  .map-panel { padding: 8px; position: relative; position: sticky; top: 12px; }
+  .map-panel { padding: 8px; position: relative; }
+  @media (min-width: 941px) { .map-panel { position: sticky; top: 12px; } }
   svg { display: block; width: 100%; height: auto; }
   .map-tools { position: absolute; top: 14px; left: 14px; z-index: 4; }
   .map-tools button {
