@@ -12,6 +12,9 @@ const API_VERSION = "2025-01";
 const SHEET_ID = '1Tg5CeYpv6C2lvBfuhmVXQr1FWaIUc6ZvSI0r5MFZRSA';
 const SHEET_NAME = 'Sheet1';
 
+// ULTRAFIT Korea HQ warehouse sheet (maintained by the Korea team)
+const KOREA_SHEET_ID = '1j6i9swoR46-5EtHzaZdE6FcvHw-7A-nU4ACjpr35UvU';
+
 // Map Shopify location IDs → friendly names
 const LOCATION_NAMES = {
   "gid://shopify/Location/78608269532": "Korea WH",
@@ -200,28 +203,130 @@ async function fetchGoogleSheetsInventory() {
   }
 }
 
+// Fetch Korea HQ warehouse status sheet
+// Columns: A Type | B Product | C Size | D Inventory Status | E Rough Qty | F Date back? | G Notes
+// Type/Product use merged cells, so blank cells inherit the value above them.
+async function fetchKoreaInventory() {
+  const keyStr = process.env.GOOGLE_SHEETS_KEY;
+  if (!keyStr) {
+    console.warn("GOOGLE_SHEETS_KEY not set, skipping Korea sheet");
+    return { products: [], updated: null, hasError: false };
+  }
+
+  try {
+    const credentials = JSON.parse(keyStr);
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+
+    const sheets = google.sheets({ version: 'v4', auth });
+    // No sheet name in the range → first (gid=0) tab
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: KOREA_SHEET_ID,
+      range: 'A1:G500',
+    });
+
+    const rows = response.data.values || [];
+    if (rows.length < 3) {
+      return { products: [], updated: null, hasError: false };
+    }
+
+    // Row 1: "ULTRAFIT Korea | Date Last Updated | <date>"
+    const titleRow = rows[0] || [];
+    const updated = (titleRow[2] || '').trim() || null;
+
+    // Find the header row (contains "Product" / "Inventory Status"), data starts after it
+    let headerIdx = 1;
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      const joined = (rows[i] || []).join(' ').toLowerCase();
+      if (joined.includes('inventory status')) { headerIdx = i; break; }
+    }
+
+    const products = [];
+    let lastType = '';
+    let lastProduct = '';
+
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const row = rows[i] || [];
+      const rawType = (row[0] || '').trim();
+      const rawProduct = (row[1] || '').trim();
+      const rawSize = (row[2] || '').trim();
+      const status = (row[3] || '').trim();
+      const dateBack = (row[5] || '').trim();
+      const notes = (row[6] || '').trim();
+
+      // Merged cells: blank Type/Product means "same as the row above"
+      if (rawType) lastType = rawType;
+      if (rawProduct) lastProduct = rawProduct;
+
+      const product = rawProduct || lastProduct;
+      if (!product) continue;
+      // Skip rows that are entirely empty apart from carried-over merges
+      if (!rawProduct && !rawSize && !status && !dateBack && !notes) continue;
+
+      // Tint rows merge Product and Size into the same text — don't repeat it
+      const variant = (rawSize && rawSize !== product) ? rawSize : '';
+
+      products.push({
+        product: product,
+        vendor: "",
+        type: lastType || "",
+        status: "ACTIVE",
+        variant: variant,
+        sku: "",
+        price: null,
+        byLoc: { "KOREA STOCK": 0 },
+        qty: 0,
+        image: null,
+        source: "korea",           // Mark as Korea sheet data
+        koreaStatus: status,        // e.g. "Healthy 50+", "Out of Stock"
+        dateBack: dateBack,         // e.g. "3rd week of July", "Discontinued"
+        notes: notes,
+      });
+    }
+
+    return { products, updated, hasError: false };
+  } catch (err) {
+    console.error("Korea sheet error:", err.message);
+    return { products: [], updated: null, hasError: true, error: err.message };
+  }
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
   try {
-    // Fetch both sources in parallel
-    const [shopifyResult, googleResult] = await Promise.all([
+    // Fetch all sources in parallel
+    const [shopifyResult, googleResult, koreaResult] = await Promise.all([
       fetchShopifyInventory(),
       fetchGoogleSheetsInventory(),
+      fetchKoreaInventory(),
     ]);
 
-    const allProducts = [...shopifyResult.products, ...googleResult.products];
-    const allLocations = Array.from(shopifyResult.locationSet);
+    const allProducts = [
+      ...shopifyResult.products,
+      ...googleResult.products,
+      ...koreaResult.products,
+    ];
+    const locationSet = new Set(shopifyResult.locationSet);
 
     // Add ULTRAFIT WEST if Google Sheets has data
     if (googleResult.products.length > 0) {
-      allLocations.push("ULTRAFIT WEST");
+      locationSet.add("ULTRAFIT WEST");
+    }
+    // KOREA STOCK is driven by the Korea team's sheet — the Shopify
+    // "Korea WH" location is unlinked from the location dropdown
+    locationSet.delete("Korea WH");
+    if (koreaResult.products.length > 0) {
+      locationSet.add("KOREA STOCK");
     }
 
     res.status(200).json({
       updatedAt: new Date().toISOString(),
+      koreaUpdated: koreaResult.updated || null,
       count: allProducts.length,
-      locations: allLocations.sort(),
+      locations: Array.from(locationSet).sort(),
       rows: allProducts,
     });
   } catch (err) {

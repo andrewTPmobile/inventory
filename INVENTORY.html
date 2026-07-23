@@ -106,6 +106,15 @@
   .pill.ok { background: rgba(47,191,113,.15); color: var(--ok); }
   .pill.warn { background: rgba(224,168,61,.15); color: var(--warn); }
   .pill.bad { background: rgba(229,72,77,.15); color: var(--bad); }
+  .pill.mid { background: rgba(224,168,61,.15); color: #e0a83d; }
+  .pill.na { background: rgba(154,163,178,.12); color: var(--muted); }
+  .pill.status { font-size: 15px; white-space: nowrap; }
+  /* Korea (HQ) mode: sheet-driven status view — search + location only */
+  #toolbar.korea-mode .field { display: none; }
+  #toolbar.korea-mode #searchField { display: flex; }
+  #toolbar.korea-mode .field:has(#locationFilter) { display: flex; }
+  #tableHost.korea-mode td.qty { font-size: 15px; padding: 12px; }
+  #tableHost.korea-mode th { cursor: default; }
   .thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; background: var(--panel-2); }
   .muted { color: var(--muted); }
   .status-chip { font-size: 11px; color: var(--muted); text-transform: uppercase; }
@@ -179,6 +188,7 @@
 
   <a href="/">🏠 HOME</a>
   <div class="menu-title">Inventory</div>
+  <button class="menu-item" onclick="goLocation('KOREA STOCK')"><span class="dot" style="background:#165DA3"></span>KOREA STOCK</button>
   <button class="menu-item" onclick="goLocation('ULTRAFIT NORTH USA')"><span class="dot" style="background:#79BC29"></span>NORTH INVENTORY</button>
   <button class="menu-item" onclick="goLocation('ULTRAFIT SOUTH')"><span class="dot" style="background:#1B75BB"></span>SOUTH INVENTORY</button>
   <button class="menu-item" onclick="goLocation('ULTRAFIT WEST')"><span class="dot" style="background:#ED741B"></span>WEST INVENTORY</button>
@@ -268,6 +278,7 @@
   const DEFAULT_TYPE = "CLEAR PPF";
   let firstLoad = true;
   let DATA = [];
+  let KOREA_UPDATED = null;
   let sortKey = "qty";
   let sortAsc = false;
 
@@ -300,6 +311,7 @@
       }
       const j = await r.json();
       DATA = j.rows || [];
+      KOREA_UPDATED = j.koreaUpdated || null;
       populateFilters(j.locations || []);
       const d = new Date(j.updatedAt);
       document.getElementById("updated").textContent =
@@ -411,6 +423,20 @@
     const locFilter = document.getElementById("locationFilter").value;
     let rows = DATA.slice();
 
+    // KOREA STOCK: sheet-driven status rows only, keep the sheet's order
+    if (locFilter === "KOREA STOCK") {
+      rows = rows.filter(r => r.source === "korea");
+      if (q) {
+        rows = rows.filter(r =>
+          (r.product + " " + r.type + " " + r.variant + " " + (r.koreaStatus || "") + " " + (r.notes || ""))
+            .toLowerCase().includes(q)
+        );
+      }
+      return rows;
+    }
+    // Korea rows never mix into other views
+    rows = rows.filter(r => r.source !== "korea");
+
     // When filtering by ULTRAFIT WEST, show only Google Sheets items
     if (locFilter === "ULTRAFIT WEST") {
       rows = rows.filter(r => r.source === "google");
@@ -445,13 +471,65 @@
     return rows;
   }
 
+  // Color a Korea sheet status like "Healthy 50+" / "Out of Stock"
+  function koreaPill(status) {
+    const s = (status || "").toLowerCase();
+    const label = escapeHtml(status || "No report");
+    if (!s) return '<span class="pill na status">No report</span>';
+    if (s.includes("out")) return '<span class="pill bad status">' + label + '</span>';
+    if (s.includes("low")) return '<span class="pill warn status">' + label + '</span>';
+    if (s.includes("medium")) return '<span class="pill mid status">' + label + '</span>';
+    if (s.includes("healthy")) return '<span class="pill ok status">' + label + '</span>';
+    return '<span class="pill na status">' + label + '</span>';
+  }
+
+  function renderKorea() {
+    const rows = currentRows();
+    const kAll = DATA.filter(r => r.source === "korea");
+    const healthy = kAll.filter(r => (r.koreaStatus || "").toLowerCase().includes("healthy")).length;
+    const medium = kAll.filter(r => (r.koreaStatus || "").toLowerCase().includes("medium")).length;
+    const low = kAll.filter(r => (r.koreaStatus || "").toLowerCase().includes("low")).length;
+    const out = kAll.filter(r => (r.koreaStatus || "").toLowerCase().includes("out")).length;
+    document.getElementById("stats").innerHTML = `
+      <div class="card"><div class="n">${kAll.length}</div><div class="l">Items reported</div></div>
+      <div class="card"><div class="n" style="color:var(--ok)">${healthy}</div><div class="l">Healthy</div></div>
+      <div class="card"><div class="n" style="color:#e0a83d">${medium}</div><div class="l">Medium</div></div>
+      <div class="card warn"><div class="n">${low}</div><div class="l">Low</div></div>
+      <div class="card bad"><div class="n">${out}</div><div class="l">Out of stock</div></div>
+      <div class="card"><div class="n">${escapeHtml(KOREA_UPDATED || "—")}</div><div class="l">Korea sheet updated</div></div>
+    `;
+    document.getElementById("rowcount").textContent = rows.length + " shown";
+    let html = "<table><thead><tr><th>Type</th><th>Product</th><th>Size</th><th>Korea Stock</th><th>Back / Notes</th></tr></thead><tbody>";
+    for (const r of rows) {
+      const extra = [r.dateBack, r.notes].filter(Boolean).join(" · ");
+      html += "<tr>";
+      html += `<td class="muted">${escapeHtml(r.type)}</td>`;
+      html += `<td>${escapeHtml(r.product)}</td>`;
+      html += `<td class="muted">${escapeHtml(r.variant)}</td>`;
+      html += `<td class="qty">${koreaPill(r.koreaStatus)}</td>`;
+      html += `<td class="muted">${escapeHtml(extra)}</td>`;
+      html += "</tr>";
+    }
+    html += "</tbody></table>";
+    document.getElementById("tableHost").innerHTML = html;
+  }
+
   function render() {
     if (!DATA.length) return;
     const locFilter = document.getElementById("locationFilter").value;
     const isWestMode = locFilter === "ULTRAFIT WEST";
+    const isKoreaMode = locFilter === "KOREA STOCK";
 
-    // Apply west mode styling
+    // Apply mode styling
     document.getElementById("toolbar").classList.toggle("west-mode", isWestMode);
+    document.getElementById("toolbar").classList.toggle("korea-mode", isKoreaMode);
+    const tableHostEl = document.getElementById("tableHost");
+    tableHostEl.classList.toggle("korea-mode", isKoreaMode);
+    if (isKoreaMode) {
+      tableHostEl.classList.remove("west-mode");
+      renderKorea();
+      return;
+    }
 
     const rows = currentRows();
     const typeFilter = document.getElementById("typeFilter").value;
