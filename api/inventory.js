@@ -136,12 +136,54 @@ async function fetchShopifyInventory() {
   return { products, locationSet };
 }
 
+// Pull a "last updated" stamp out of a sheet's top rows.
+// The Korea sheet spells it out in row 1 ("Date Last Updated | 7/3/26"); other
+// sheets may just park a date up there, so accept either shape.
+function findUpdatedCell(rows) {
+  const LABEL = /(last\s*updated|updated|as\s*of)/i;
+  const DATE = /^\s*\d{1,2}[\/.-]\d{1,2}([\/.-]\d{2,4})?\s*$/;
+  for (let i = 0; i < Math.min(rows.length, 4); i++) {
+    const row = rows[i] || [];
+    for (let c = 0; c < row.length; c++) {
+      const cell = String(row[c] || "").trim();
+      if (!cell) continue;
+      if (LABEL.test(cell)) {
+        // the stamp is the next non-empty cell on the same row
+        for (let n = c + 1; n < row.length; n++) {
+          const val = String(row[n] || "").trim();
+          if (val) return val;
+        }
+      }
+      if (i < 2 && DATE.test(cell)) return cell;
+    }
+  }
+  return null;
+}
+
+// Last-modified time straight from Drive, used when the sheet carries no stamp
+// of its own. Needs the Drive API enabled for the service account; if it isn't,
+// this quietly returns null rather than failing the whole request.
+async function fetchDriveModified(credentials, fileId) {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/drive.metadata.readonly'],
+    });
+    const drive = google.drive({ version: 'v3', auth });
+    const r = await drive.files.get({ fileId, fields: 'modifiedTime' });
+    return r.data.modifiedTime || null;
+  } catch (err) {
+    console.warn("Drive modifiedTime unavailable:", err.message);
+    return null;
+  }
+}
+
 // Fetch Google Sheets inventory
 async function fetchGoogleSheetsInventory() {
   const keyStr = process.env.GOOGLE_SHEETS_KEY;
   if (!keyStr) {
     console.warn("GOOGLE_SHEETS_KEY not set, skipping Google Sheets");
-    return { products: [], hasError: false };
+    return { products: [], updated: null, modified: null, hasError: false };
   }
 
   try {
@@ -152,15 +194,20 @@ async function fetchGoogleSheetsInventory() {
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
+    // A:F rather than A:C so a date parked to the right of the item columns is
+    // still visible; the product parse below only ever reads A, B and C.
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `'${SHEET_NAME}'!A:C`,
+      range: `'${SHEET_NAME}'!A:F`,
     });
 
     const rows = response.data.values || [];
     if (rows.length < 2) {
-      return { products: [], hasError: false };
+      return { products: [], updated: null, modified: null, hasError: false };
     }
+
+    const updated = findUpdatedCell(rows);
+    const modified = updated ? null : await fetchDriveModified(credentials, SHEET_ID);
 
     const products = [];
     const headerRow = rows[0] || [];
@@ -170,11 +217,19 @@ async function fetchGoogleSheetsInventory() {
 
     const startIdx = isHeaderRow ? 1 : 0;
 
+    // Type uses merged cells (labelled once per block, like the Korea sheet),
+    // so a blank Type means "same as the row above". Line breaks inside the
+    // cell ("Clear \nPPF") collapse to a single space so it lines up with the
+    // Shopify product types.
+    let lastType = '';
+
     for (let i = startIdx; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length < 2) continue;
 
-      const type = (row[0] || '').trim();
+      const rawType = (row[0] || '').replace(/\s+/g, ' ').trim();
+      if (rawType) lastType = rawType;
+      const type = lastType;
       const itemName = (row[1] || '').trim();
       const qtyStr = (row[2] || '').trim();
       const qty = parseInt(qtyStr, 10) || 0;
@@ -196,10 +251,10 @@ async function fetchGoogleSheetsInventory() {
       });
     }
 
-    return { products, hasError: false };
+    return { products, updated, modified, hasError: false };
   } catch (err) {
     console.error("Google Sheets error:", err.message);
-    return { products: [], hasError: true, error: err.message };
+    return { products: [], updated: null, modified: null, hasError: true, error: err.message };
   }
 }
 
@@ -325,6 +380,9 @@ module.exports = async (req, res) => {
     res.status(200).json({
       updatedAt: new Date().toISOString(),
       koreaUpdated: koreaResult.updated || null,
+      // WEST sheet's own stamp if it has one, else its Drive last-modified time
+      westUpdated: googleResult.updated || null,
+      westModified: googleResult.modified || null,
       count: allProducts.length,
       locations: Array.from(locationSet).sort(),
       rows: allProducts,

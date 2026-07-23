@@ -383,6 +383,9 @@
     document.getElementById("vltFilter").value = "all";
     document.getElementById("sizeFilter").value = "all";
     document.getElementById("search").value = "";
+    // every location opens in the default CLEAR PPF / XP CRYSTAL order
+    sortKey = "featured";
+    sortAsc = false;
     closeMenu();
     render();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -395,10 +398,11 @@
   let firstLoad = true;
   let DATA = [];
   let KOREA_UPDATED = null;
+  let WEST_UPDATED = null;
   // Locations that carry real counts — the columns of the All-locations view.
   // KOREA STOCK is status-only (no numbers), so it isn't a column.
   let QTY_LOCATIONS = [];
-  let sortKey = "qty";
+  let sortKey = "featured";
   let sortAsc = false;
 
   // Preferred left-to-right order for the location columns; anything not
@@ -447,6 +451,9 @@
       const j = await r.json();
       DATA = j.rows || [];
       KOREA_UPDATED = j.koreaUpdated || null;
+      // the sheet's own stamp reads better than a raw Drive timestamp
+      WEST_UPDATED = j.westUpdated ||
+        (j.westModified ? new Date(j.westModified).toLocaleDateString() : null);
       const locs = j.locations || [];
       QTY_LOCATIONS = locs
         .filter(l => l !== "KOREA STOCK")
@@ -485,6 +492,40 @@
     "WPF"
   ];
 
+  // ---- Default ("featured") row order ----
+  // Every location opens with CLEAR PPF at the top, and XP CRYSTAL at the top
+  // of CLEAR PPF. Clicking a column header switches to that plain sort.
+  const TYPE_PRIORITY = ["CLEAR PPF"].concat(
+    ALLOWED_TYPES.filter(t => t.toUpperCase() !== "CLEAR PPF")
+  );
+  const PRODUCT_PRIORITY = ["XP CRYSTAL"];   // leads its type group
+
+  function typeRank(t) {
+    const u = normType(t);
+    const i = TYPE_PRIORITY.findIndex(x => normType(x) === u);
+    return i === -1 ? TYPE_PRIORITY.length : i;
+  }
+  function productRank(p) {
+    const u = normType(p);
+    const i = PRODUCT_PRIORITY.findIndex(x => u.indexOf(normType(x)) === 0);
+    return i === -1 ? PRODUCT_PRIORITY.length : i;
+  }
+  // type → product → sizes of that product together, biggest stock first
+  function featuredCmp(qtyOf) {
+    return (a, b) => {
+      const t = typeRank(a.type) - typeRank(b.type);
+      if (t) return t;
+      const p = productRank(a.product) - productRank(b.product);
+      if (p) return p;
+      const n = normType(a.product).localeCompare(normType(b.product));
+      if (n) return n;
+      // Korea-only rows sit under the product they belong to, not above it
+      const ka = a.koreaOnly ? 1 : 0, kb = b.koreaOnly ? 1 : 0;
+      if (ka !== kb) return ka - kb;
+      return (qtyOf(b) || 0) - (qtyOf(a) || 0);
+    };
+  }
+
   function populateFilters(locations) {
     const locSel = document.getElementById("locationFilter");
     // Allow deep links like /?loc=ULTRAFIT%20SOUTH from the checkout pages' menus
@@ -496,7 +537,7 @@
 
     // Types present in the data, shown only if whitelisted, in whitelist order
     const present = Array.from(new Set(DATA.map(r => r.type).filter(Boolean)));
-    const types = ALLOWED_TYPES
+    const types = TYPE_PRIORITY
       .map(a => present.find(p => p.toUpperCase() === a.toUpperCase()))
       .filter(Boolean)
       .filter((v, i, arr) => arr.indexOf(v) === i);
@@ -613,6 +654,10 @@
         (r.product + " " + r.sku + " " + r.vendor + " " + r.type + " " + r.variant)
           .toLowerCase().includes(q)
       );
+    }
+    if (sortKey === "featured") {
+      rows.sort(featuredCmp(effQty));
+      return rows;
     }
     rows.sort((a, b) => {
       let x = sortVal(a, sortKey);
@@ -846,15 +891,19 @@
     const leftovers = attachKorea(merged);
     const rows = matrixFilter(merged.concat(koreaOnlyRows(leftovers)));
 
-    rows.sort((a, b) => {
-      let x = matrixSortVal(a, sortKey), y = matrixSortVal(b, sortKey);
-      if (typeof x === "string") { x = x.toLowerCase(); y = (y || "").toLowerCase(); }
-      if (x === null || x === undefined) x = -Infinity;
-      if (y === null || y === undefined) y = -Infinity;
-      if (x < y) return sortAsc ? -1 : 1;
-      if (x > y) return sortAsc ? 1 : -1;
-      return 0;
-    });
+    if (sortKey === "featured") {
+      rows.sort(featuredCmp(r => r.total));
+    } else {
+      rows.sort((a, b) => {
+        let x = matrixSortVal(a, sortKey), y = matrixSortVal(b, sortKey);
+        if (typeof x === "string") { x = x.toLowerCase(); y = (y || "").toLowerCase(); }
+        if (x === null || x === undefined) x = -Infinity;
+        if (y === null || y === undefined) y = -Infinity;
+        if (x < y) return sortAsc ? -1 : 1;
+        if (x > y) return sortAsc ? 1 : -1;
+        return 0;
+      });
+    }
 
     // Per-location unit totals across everything currently filtered in
     const totals = {};
@@ -875,7 +924,9 @@
       ).join("") +
       `<div class="card"><div class="n">${grand.toLocaleString()}</div><div class="l">Units (US total)</div></div>`;
     document.getElementById("rowcount").textContent =
-      rows.length + " shown" + (KOREA_UPDATED ? " · Korea sheet " + KOREA_UPDATED : "");
+      rows.length + " shown" +
+      (KOREA_UPDATED ? " · Korea sheet " + KOREA_UPDATED : "") +
+      (WEST_UPDATED ? " · WEST sheet " + WEST_UPDATED : "");
 
     const th = (label, key, cls) => {
       const sorted = key === sortKey ? "sorted " + (sortAsc ? "asc" : "") : "";
@@ -948,8 +999,12 @@
       <div class="card warn"><div class="n">${zero}</div><div class="l">Out of stock</div></div>
       <div class="card warn"><div class="n">${low}</div><div class="l">Low (1–${LOW_THRESHOLD})</div></div>
       <div class="card"><div class="n">${totalUnits.toLocaleString()}</div><div class="l">${unitsLabel}</div></div>
+      ${isWestMode && WEST_UPDATED
+        ? `<div class="card"><div class="n">${escapeHtml(WEST_UPDATED)}</div><div class="l">WEST sheet updated</div></div>`
+        : ""}
     `;
-    document.getElementById("rowcount").textContent = rows.length + " shown";
+    document.getElementById("rowcount").textContent = rows.length + " shown" +
+      (isWestMode && WEST_UPDATED ? " · WEST sheet " + WEST_UPDATED : "");
     const cols = [
       ["", "image"],
       ["Product", "product"],
