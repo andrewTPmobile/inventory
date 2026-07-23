@@ -102,7 +102,7 @@
     display: none;
   }
   #tableHost.west-mode td.qty { font-size: 24px; padding: 14px 12px; }
-  .pill { padding: 4px 12px; border-radius: 999px; font-size: 18px; font-weight: 700; }
+  .pill { padding: 5px 14px; border-radius: 999px; font-size: 22px; font-weight: 700; }
   .pill.ok { background: rgba(47,191,113,.15); color: var(--ok); }
   .pill.warn { background: rgba(224,168,61,.15); color: var(--warn); }
   .pill.bad { background: rgba(229,72,77,.15); color: var(--bad); }
@@ -115,6 +115,24 @@
   #toolbar.korea-mode .field:has(#locationFilter) { display: flex; }
   #tableHost.korea-mode td.qty { font-size: 15px; padding: 12px; }
   #tableHost.korea-mode th { cursor: default; }
+  /* All-locations mode: one column per location */
+  #tableHost.matrix-mode { overflow-x: auto; }
+  #tableHost.matrix-mode table { min-width: 900px; }
+  /* the scroll container becomes the sticky viewport, so the header's 63px
+     offset would sit on top of row 1 — pin it to the container instead */
+  #tableHost.matrix-mode th { top: 0; }
+  #tableHost.matrix-mode th.loc, #tableHost.matrix-mode td.loc { text-align: center; white-space: nowrap; }
+  #tableHost.matrix-mode th.loc { color: var(--text); }
+  #tableHost.matrix-mode td.loc .pill { font-size: 24px; padding: 6px 16px; }
+  #tableHost.matrix-mode th.total, #tableHost.matrix-mode td.total { text-align: center; }
+  #tableHost.matrix-mode td.total {
+    font-weight: 700; font-size: 28px; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  /* Korea HQ reports a status, not a count — give it room and set it apart */
+  #tableHost.matrix-mode th.korea-col, #tableHost.matrix-mode td.korea-col {
+    border-right: 1px solid var(--line); padding-right: 16px;
+  }
+  #tableHost.matrix-mode td.korea-col .pill { font-size: 16px; }
   .thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; background: var(--panel-2); }
   .muted { color: var(--muted); }
   .status-chip { font-size: 11px; color: var(--muted); text-transform: uppercase; }
@@ -140,6 +158,10 @@
     /* hide only the image column on phones (columns: image, product, variant, qty) */
     th:nth-child(1), td:nth-child(1) {
       display: none;
+    }
+    /* the matrix view has no image column — keep Product visible */
+    #tableHost.matrix-mode th:nth-child(1), #tableHost.matrix-mode td:nth-child(1) {
+      display: table-cell;
     }
     td.qty { font-size: 20px; }
   }
@@ -280,6 +302,7 @@
 
   <a href="/">🏠 HOME</a>
   <div class="menu-title">Inventory</div>
+  <button class="menu-item" onclick="goLocation('all')"><span class="dot" style="background:#9aa3b2"></span>ALL LOCATIONS</button>
   <button class="menu-item" onclick="goLocation('KOREA STOCK')"><span class="dot" style="background:#165DA3"></span>KOREA STOCK</button>
   <button class="menu-item" onclick="goLocation('ULTRAFIT NORTH USA')"><span class="dot" style="background:#79BC29"></span>NORTH INVENTORY</button>
   <button class="menu-item" onclick="goLocation('ULTRAFIT SOUTH')"><span class="dot" style="background:#1B75BB"></span>SOUTH INVENTORY</button>
@@ -366,13 +389,26 @@
   }
 
   const LOW_THRESHOLD = 5;
-  const DEFAULT_LOCATION = "ULTRAFIT NORTH USA";
+  // Home view lands on the all-locations board (Korea HQ + every US warehouse)
+  const DEFAULT_LOCATION = "all";
   const DEFAULT_TYPE = "CLEAR PPF";
   let firstLoad = true;
   let DATA = [];
   let KOREA_UPDATED = null;
+  // Locations that carry real counts — the columns of the All-locations view.
+  // KOREA STOCK is status-only (no numbers), so it isn't a column.
+  let QTY_LOCATIONS = [];
   let sortKey = "qty";
   let sortAsc = false;
+
+  // Preferred left-to-right order for the location columns; anything not
+  // listed here follows, alphabetically.
+  const LOCATION_ORDER = [
+    "ULTRAFIT NORTH USA",
+    "ULTRAFIT SOUTH",
+    "ULTRAFIT WEST",
+    "UF West",
+  ];
 
   function fmtMoney(n) {
     if (n === null || n === undefined) return "";
@@ -389,7 +425,14 @@
   function effQty(r) {
     const loc = document.getElementById("locationFilter").value;
     if (loc === "all") return r.qty;
-    return (r.byLoc && typeof r.byLoc[loc] === "number") ? r.byLoc[loc] : 0;
+    const q = locQty(r, loc);
+    return q === null ? 0 : q;
+  }
+
+  // Quantity at one location, or null when the item isn't stocked there at all
+  // (which reads differently from "stocked here, currently 0").
+  function locQty(r, loc) {
+    return (r.byLoc && typeof r.byLoc[loc] === "number") ? r.byLoc[loc] : null;
   }
 
   async function loadData() {
@@ -404,7 +447,17 @@
       const j = await r.json();
       DATA = j.rows || [];
       KOREA_UPDATED = j.koreaUpdated || null;
-      populateFilters(j.locations || []);
+      const locs = j.locations || [];
+      QTY_LOCATIONS = locs
+        .filter(l => l !== "KOREA STOCK")
+        .sort((a, b) => {
+          const ia = LOCATION_ORDER.indexOf(a), ib = LOCATION_ORDER.indexOf(b);
+          if (ia > -1 && ib > -1) return ia - ib;
+          if (ia > -1) return -1;
+          if (ib > -1) return 1;
+          return a.localeCompare(b);
+        });
+      populateFilters(locs);
       const d = new Date(j.updatedAt);
       document.getElementById("updated").textContent =
         "Updated " + d.toLocaleString() + " · " + j.count + " items";
@@ -507,6 +560,17 @@
     if ([...sizeSel.options].some(o => o.value === prevSize)) sizeSel.value = prevSize;
   }
 
+  // Sort value for a column key. "loc:<name>" sorts by that location's column
+  // in the All-locations view; everything else is a plain row field.
+  function sortVal(r, key) {
+    if (key === "qty") return effQty(r);
+    if (key.indexOf("loc:") === 0) {
+      const q = locQty(r, key.slice(4));
+      return q === null ? -Infinity : q;
+    }
+    return r[key];
+  }
+
   function currentRows() {
     const q = document.getElementById("search").value.trim().toLowerCase();
     const typeFilter = document.getElementById("typeFilter").value;
@@ -551,8 +615,8 @@
       );
     }
     rows.sort((a, b) => {
-      let x = sortKey === "qty" ? effQty(a) : a[sortKey];
-      let y = sortKey === "qty" ? effQty(b) : b[sortKey];
+      let x = sortVal(a, sortKey);
+      let y = sortVal(b, sortKey);
       if (typeof x === "string") { x = x.toLowerCase(); y = (y || "").toLowerCase(); }
       if (x === null || x === undefined) x = -Infinity;
       if (y === null || y === undefined) y = -Infinity;
@@ -606,20 +670,265 @@
     document.getElementById("tableHost").innerHTML = html;
   }
 
+  // ---- All-locations view --------------------------------------------------
+  // The same physical product arrives from three sources under three different
+  // spellings — Shopify ("XP CRYSTAL" + variant "60\" x 50 ft"), the WEST sheet
+  // ("XP CRYSTAL (60\" x 50ft)") and the Korea sheet ("XP Crystal" + "60\" x 50
+  // ft (250sqf)"). itemKey() reduces all three to one identity so a product
+  // gets ONE row with every location on it.
+  const KOREA_COL = "KOREA HQ";
+
+  function normName(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+
+  // "60\" x 50 ft (250sqf)" → "60x50ft"; "" when the text has no W x L
+  function sizeKey(s) {
+    const m = String(s || "").match(/(\d+)\s*(?:"|”|inch(?:es)?|in)?\s*[x×]\s*(\d+)\s*(ft|feet|m|mm|cm)?/i);
+    return m ? m[1] + "x" + m[2] + (m[3] || "ft").toLowerCase().replace("feet", "ft") : "";
+  }
+
+  // Tint variants lead with the VLT: "05 / 60\" x 100ft" → "5"
+  function vltKey(s) {
+    const m = String(s || "").match(/^\s*(\d{1,2})\s*\//);
+    return m ? String(Number(m[1])) : "";
+  }
+
+  function itemKey(product, variant) {
+    let p = String(product || ""), v = String(variant || "");
+    // The sheets pack the size into the product name — pull it back out
+    const m = p.match(/\(([^()]*\d[^()]*)\)\s*$/);
+    if (m) { if (!v) v = m[1]; p = p.slice(0, m.index); }
+    return normName(p) + "|" + vltKey(v) + "|" + sizeKey(v);
+  }
+
+  // The Korea sheet's Max Blue rows keep the product name in the Type cell
+  // ("Window Tint\nMax Blue 70") and leave only a size in the Product column.
+  function koreaKey(r) {
+    const p = String(r.product || "").trim();
+    const sizeOnly = p && /^[\d\s"'”×xX.\/ftinsqf()-]+$/.test(p);
+    if (sizeOnly && r.type) {
+      const lines = String(r.type).split("\n").map(s => s.trim()).filter(Boolean);
+      const name = lines[lines.length - 1];
+      if (name) return itemKey(name, r.variant || p);
+    }
+    return itemKey(r.product, r.variant);
+  }
+
+  // Order for sorting the Korea column, worst stock first
+  function koreaRank(status) {
+    const s = (status || "").toLowerCase();
+    if (!s) return -1;
+    if (s.includes("out")) return 0;
+    if (s.includes("very low")) return 1;
+    if (s.includes("low")) return 2;
+    if (s.includes("medium")) return 3;
+    if (s.includes("super")) return 5;
+    if (s.includes("healthy")) return 4;
+    return -1;
+  }
+
+  // One display row: merged quantities + the Korea sheet's status
+  function matrixRow(base, group) {
+    const byLoc = {};
+    for (const r of group) {
+      for (const l of QTY_LOCATIONS) {
+        const q = locQty(r, l);
+        if (q !== null) byLoc[l] = (byLoc[l] || 0) + q;
+      }
+    }
+    // Total is the sum of the columns actually shown, so it always reconciles
+    // (r.qty would also count the retired "Korea WH" Shopify location)
+    let total = 0;
+    for (const l of QTY_LOCATIONS) if (typeof byLoc[l] === "number") total += byLoc[l];
+    return {
+      product: base.product, variant: base.variant, status: base.status,
+      type: base.type, vendor: base.vendor, sku: base.sku,
+      key: itemKey(base.product, base.variant),
+      byLoc: byLoc, total: total, korea: null,
+    };
+  }
+
+  function mergeRows(rows) {
+    const groups = new Map();
+    for (const r of rows) {
+      const k = itemKey(r.product, r.variant);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    const out = [];
+    for (const group of groups.values()) {
+      // Two rows from the SAME source that share a key are genuinely different
+      // products (uniform sizes, display boards) — never fold those together.
+      const sources = group.map(r => r.source);
+      const oneEach = sources.length === new Set(sources).size;
+      if (group.length > 1 && oneEach) {
+        out.push(matrixRow(group.find(r => r.source === "shopify") || group[0], group));
+      } else {
+        group.forEach(r => out.push(matrixRow(r, [r])));
+      }
+    }
+    return out;
+  }
+
+  // Hang each Korea sheet row on its product; return the ones with no counterpart
+  function attachKorea(rows) {
+    const koreaRows = DATA.filter(r => r.source === "korea");
+    const koreaByKey = new Map(), rowsByKey = new Map();
+    for (const r of koreaRows) {
+      const k = koreaKey(r);
+      koreaByKey.set(k, (koreaByKey.get(k) || []).concat([r]));
+    }
+    for (const row of rows) rowsByKey.set(row.key, (rowsByKey.get(row.key) || 0) + 1);
+
+    const used = new Set();
+    for (const row of rows) {
+      const hit = koreaByKey.get(row.key);
+      // Only pair when it is unambiguous on both sides
+      if (hit && hit.length === 1 && rowsByKey.get(row.key) === 1) {
+        row.korea = hit[0];
+        used.add(hit[0]);
+      }
+    }
+    return koreaRows.filter(r => !used.has(r));
+  }
+
+  // Korea items with no Shopify/WEST counterpart still get a row of their own
+  function koreaOnlyRows(leftovers) {
+    return leftovers.map(r => ({
+      product: r.product, variant: r.variant, status: "ACTIVE", key: "",
+      type: r.type, vendor: "", sku: "",
+      byLoc: {}, total: null, korea: r, koreaOnly: true,
+    }));
+  }
+
+  // Filters run AFTER the merge: the WEST sheet leaves Type blank and spells it
+  // differently, so filtering the raw rows first would strip WEST quantities off
+  // products that should keep them.
+  function normType(s) { return String(s || "").toUpperCase().replace(/\s+/g, " ").trim(); }
+
+  function matrixFilter(rows) {
+    const q = document.getElementById("search").value.trim().toLowerCase();
+    const typeFilter = normType(document.getElementById("typeFilter").value);
+    const vltFilter = document.getElementById("vltFilter").value;
+    const sizeFilter = document.getElementById("sizeFilter").value;
+    return rows.filter(r => {
+      if (typeFilter !== "ALL") {
+        const t = normType(r.type);
+        // Korea-only rows carry the sheet's own wording ("Window Tint Max Blue 70")
+        const hit = r.koreaOnly ? t.indexOf(typeFilter) > -1 : t === typeFilter;
+        if (!hit) return false;
+      }
+      const p = splitVariant(r.variant);
+      if (vltFilter !== "all" && p.vlt !== vltFilter) return false;
+      if (sizeFilter !== "all" && p.size !== sizeFilter) return false;
+      if (q) {
+        const hay = [r.product, r.variant, r.type, r.vendor, r.sku,
+                     r.korea && r.korea.koreaStatus, r.korea && r.korea.notes]
+                     .filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function matrixSortVal(row, key) {
+    if (key === "qty") return row.total === null ? -Infinity : row.total;
+    if (key === "korea") return koreaRank(row.korea && row.korea.koreaStatus);
+    if (key.indexOf("loc:") === 0) {
+      const q = row.byLoc[key.slice(4)];
+      return typeof q === "number" ? q : -Infinity;
+    }
+    return row[key];
+  }
+
+  function renderMatrix() {
+    const locs = QTY_LOCATIONS;
+    const merged = mergeRows(DATA.filter(r => r.source !== "korea"));
+    const leftovers = attachKorea(merged);
+    const rows = matrixFilter(merged.concat(koreaOnlyRows(leftovers)));
+
+    rows.sort((a, b) => {
+      let x = matrixSortVal(a, sortKey), y = matrixSortVal(b, sortKey);
+      if (typeof x === "string") { x = x.toLowerCase(); y = (y || "").toLowerCase(); }
+      if (x === null || x === undefined) x = -Infinity;
+      if (y === null || y === undefined) y = -Infinity;
+      if (x < y) return sortAsc ? -1 : 1;
+      if (x > y) return sortAsc ? 1 : -1;
+      return 0;
+    });
+
+    // Per-location unit totals across everything currently filtered in
+    const totals = {};
+    locs.forEach(l => { totals[l] = 0; });
+    let grand = 0;
+    for (const r of rows) {
+      for (const l of locs) {
+        const q = r.byLoc[l];
+        if (typeof q === "number" && q > 0) { totals[l] += q; grand += q; }
+      }
+    }
+    const koreaOut = rows.filter(r => r.korea && (r.korea.koreaStatus || "").toLowerCase().includes("out")).length;
+    document.getElementById("stats").innerHTML =
+      `<div class="card"><div class="n">${rows.length}</div><div class="l">Products shown</div></div>` +
+      `<div class="card bad"><div class="n">${koreaOut}</div><div class="l">Out at Korea HQ</div></div>` +
+      locs.map(l =>
+        `<div class="card"><div class="n">${totals[l].toLocaleString()}</div><div class="l">${escapeHtml(l)}</div></div>`
+      ).join("") +
+      `<div class="card"><div class="n">${grand.toLocaleString()}</div><div class="l">Units (US total)</div></div>`;
+    document.getElementById("rowcount").textContent =
+      rows.length + " shown" + (KOREA_UPDATED ? " · Korea sheet " + KOREA_UPDATED : "");
+
+    const th = (label, key, cls) => {
+      const sorted = key === sortKey ? "sorted " + (sortAsc ? "asc" : "") : "";
+      return `<th class="${cls || ""} ${sorted}" onclick="setSort('${key}')">${escapeHtml(label)}</th>`;
+    };
+    let html = "<table><thead><tr>";
+    html += th("Product", "product");
+    html += th("Variant", "variant");
+    html += th(KOREA_COL, "korea", "loc korea-col");
+    for (const l of locs) html += th(l, "loc:" + l, "loc");
+    html += th("US Total", "qty", "total");
+    html += "</tr></thead><tbody>";
+
+    for (const r of rows) {
+      const kNote = r.korea ? [r.korea.dateBack, r.korea.notes].filter(Boolean).join(" · ") : "";
+      html += "<tr>";
+      html += `<td>${escapeHtml(r.product)}${r.status !== "ACTIVE" ? ` <span class="status-chip">· ${r.status.toLowerCase()}</span>` : ""}` +
+              `${r.koreaOnly ? ' <span class="status-chip">· korea only</span>' : ""}</td>`;
+      html += `<td class="muted">${escapeHtml(r.variant)}</td>`;
+      html += `<td class="loc korea-col"${kNote ? ` title="${escapeHtml(kNote)}"` : ""}>` +
+              `${r.korea ? koreaPill(r.korea.koreaStatus) : '<span class="muted">—</span>'}</td>`;
+      for (const l of locs) {
+        const q = r.byLoc[l];
+        html += `<td class="loc">${typeof q === "number" ? stockPill(q) : '<span class="muted">—</span>'}</td>`;
+      }
+      html += `<td class="total">${r.total === null ? '<span class="muted">—</span>' : r.total.toLocaleString()}</td>`;
+      html += "</tr>";
+    }
+    html += "</tbody></table>";
+    document.getElementById("tableHost").innerHTML = html;
+  }
+
   function render() {
     if (!DATA.length) return;
     const locFilter = document.getElementById("locationFilter").value;
     const isWestMode = locFilter === "ULTRAFIT WEST";
     const isKoreaMode = locFilter === "KOREA STOCK";
+    const isMatrixMode = locFilter === "all";
 
     // Apply mode styling
     document.getElementById("toolbar").classList.toggle("west-mode", isWestMode);
     document.getElementById("toolbar").classList.toggle("korea-mode", isKoreaMode);
     const tableHostEl = document.getElementById("tableHost");
     tableHostEl.classList.toggle("korea-mode", isKoreaMode);
+    tableHostEl.classList.toggle("matrix-mode", isMatrixMode);
     if (isKoreaMode) {
       tableHostEl.classList.remove("west-mode");
       renderKorea();
+      return;
+    }
+    if (isMatrixMode) {
+      tableHostEl.classList.remove("west-mode");
+      renderMatrix();
       return;
     }
 
