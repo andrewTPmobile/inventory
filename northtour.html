@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chicago PPF Market Map</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --lake: #cde2fb;
+    --lake-ink: #1c5cab;
+    --s1: #2a78d6; /* 3M — blue */
+    --s2: #eb6834; /* STEK — orange */
+    --s3: #1baf7a; /* LLumar/Legend — aqua */
+    --s-other: #898781; /* other brands — neutral */
+    --hover-wash: rgba(11,11,11,0.045);
+    --sel-wash: rgba(42,120,214,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --lake: #10233c;
+      --lake-ink: #86b6ef;
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --s-other: #898781;
+      --hover-wash: rgba(255,255,255,0.06);
+      --sel-wash: rgba(57,135,229,0.14);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 20px; }
+  header h1 { font-size: 20px; margin: 0 0 4px; font-weight: 650; }
+  header p { margin: 0 0 14px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.45; }
+  .layout { display: grid; grid-template-columns: minmax(360px, 1fr) 420px; gap: 16px; align-items: start; }
+  @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .map-panel { padding: 8px; position: relative; position: sticky; top: 12px; }
+  svg { display: block; width: 100%; height: auto; }
+  .map-tools { position: absolute; top: 14px; left: 14px; z-index: 4; }
+  .map-tools button {
+    font: 12px system-ui, sans-serif; color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  .map-tools button:hover { background: var(--hover-wash); }
+  svg.no-labels .pin-label { display: none; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 16px;
+    padding: 10px 12px 8px; border-top: 1px solid var(--grid);
+    font-size: 12px; color: var(--text-secondary);
+  }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .legend .dia { width: 9px; height: 9px; transform: rotate(45deg); display: inline-block; background: var(--text-primary); }
+  .legend .dia.hollow { background: var(--surface-1); border: 1.6px solid var(--text-primary); }
+  .list-panel { display: flex; flex-direction: column; }
+  .list-head {
+    padding: 12px 14px 10px; border-bottom: 1px solid var(--grid);
+    font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .shop { padding: 10px 14px; border-bottom: 1px solid var(--grid); cursor: pointer; transition: background 120ms; }
+  .shop:hover { background: var(--hover-wash); }
+  .shop.sel { background: var(--sel-wash); }
+  .shop .row1 { display: flex; align-items: center; gap: 8px; }
+  .shop .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .shop .dia { width: 9px; height: 9px; transform: rotate(45deg); flex: 0 0 auto; background: var(--text-primary); }
+  .shop .dia.hollow { background: var(--surface-1); border: 1.6px solid var(--text-primary); }
+  .shop .dia.offmap { visibility: hidden; }
+  .shop .name { font-weight: 600; font-size: 13.5px; }
+  .shop .spend { margin-left: auto; font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .shop .brand {
+    margin-left: auto; font-size: 11px; color: var(--text-secondary);
+    border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; white-space: nowrap;
+  }
+  .shop .badges { margin: 3px 0 0 18px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge {
+    font-size: 10.5px; border-radius: 20px; padding: 1px 7px;
+    border: 1px solid var(--border); color: var(--text-secondary);
+  }
+  .badge.warn { color: var(--s2); border-color: var(--s2); }
+  .shop .addr { margin: 3px 0 0 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+  .shop .contact { margin: 2px 0 0 18px; font-size: 11.5px; color: var(--muted); line-height: 1.45; word-break: break-all; }
+  .shop .links { margin: 4px 0 0 18px; font-size: 12px; }
+  .shop .links a { color: var(--lake-ink); text-decoration: none; margin-right: 12px; }
+  .shop .links a:hover { text-decoration: underline; }
+  .shop .note { margin: 3px 0 0 18px; font-size: 11.5px; color: var(--muted); font-style: italic; }
+  .section-label {
+    padding: 8px 14px 6px; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.05em; background: var(--page);
+    border-bottom: 1px solid var(--grid); position: sticky; top: 0;
+  }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.14); max-width: 240px;
+    opacity: 0; transition: opacity 100ms;
+  }
+  .tooltip .t-name { font-weight: 600; margin-bottom: 2px; }
+  .tooltip .t-sub { color: var(--text-secondary); }
+  footer { margin-top: 14px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .pin { cursor: pointer; }
+  .pin circle.core { stroke: var(--surface-1); stroke-width: 2; }
+  .pin.sel circle.halo, .pin.sel circle.dhalo { display: block; }
+  circle.halo, circle.dhalo { display: none; fill: none; stroke-width: 2; opacity: 0.55; }
+  .pin rect.dcore { stroke: var(--surface-1); stroke-width: 1.6; }
+  .pin rect.dcore.hollow { fill: var(--surface-1); stroke: var(--text-primary); stroke-width: 1.8; }
+  .pin-label {
+    font-size: 10px; fill: var(--text-secondary); paint-order: stroke;
+    stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round;
+    pointer-events: none; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .geo-label { font-size: 11px; fill: var(--muted); font-style: italic; pointer-events: none; }
+  .lake-label { font-size: 12px; fill: var(--lake-ink); font-style: italic; letter-spacing: 0.06em; }
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+  <header>
+    <h1>Chicago PPF Market Map</h1>
+    <p>Three layers: <strong>retail PPF shops that don't carry XPEL</strong> (colored circles by film brand), <strong>ULTRAFIT wholesale customers</strong> (filled diamonds — have purchased), and <strong>ULTRAFIT accounts with no orders yet</strong> (hollow diamonds). Click a pin or list entry to link them; accounts outside the Chicago metro are listed at the bottom without pins.</p>
+  </header>
+
+  <div class="layout">
+    <div class="panel map-panel">
+      <div class="map-tools"><button id="lblBtn">Hide labels</button></div>
+      <svg id="map" viewBox="0 0 640 880" role="img" aria-label="Map of Chicago metro area showing PPF shops and ULTRAFIT wholesale accounts"></svg>
+      <div class="legend" id="legend"></div>
+      <div class="tooltip" id="tip"></div>
+    </div>
+
+    <div class="panel list-panel" id="list"></div>
+  </div>
+
+  <footer>
+    Retail layer verified against shop sites and XPEL's dealer locator, July 2026 — excluded XPEL dealers: Chicago Ceramic Garage, Tinting Chicago, PPF Wrap, Carrectly, MH Wrap Studio, Unlimited Auto Style, Chicago Auto Pros, Midwest Autobahnd, Pure Fleet, Luminescent Detailing. ULTRAFIT layers from the wholesale account export (spend = lifetime total). Pins marked ≈ are approximate. Brand lineups change — confirm by phone.
+  </footer>
+</div>
+
+<script>
+const BRANDS = {
+  "3M":      { color: "var(--s1)", label: "3M" },
+  "STEK":    { color: "var(--s2)", label: "STEK" },
+  "LLUMAR":  { color: "var(--s3)", label: "LLumar / Legend" },
+  "SUNTEK":  { color: "var(--s-other)", label: "SunTek" },
+  "KAVACA":  { color: "var(--s-other)", label: "Ceramic Pro KAVACA" },
+};
+
+/* type: retail | uf (purchased) | acct (no orders) */
+const SHOPS = [
+  /* ---- retail: chicago city ---- */
+  { type:"retail", name:"Skinztek", brand:"3M", brandText:"3M", sec:"city",
+    addr:"4265 N Knox Ave W2, Chicago, IL 60641", lat:41.9584, lon:-87.7443, label:"below",
+    site:"https://skinztek.com/paint-protection-film/" },
+  { type:"retail", name:"Simon's Shine Shop", brand:"LLUMAR", brandText:"Legend + LLumar", sec:"city",
+    addr:"1439 W Shakespeare Ave, Chicago, IL 60614", lat:41.9207, lon:-87.6642, label:"left",
+    site:"https://www.simonsshineshop.com/paint-protection-film/" },
+  { type:"retail", name:"Sky Auto Studio", brand:"LLUMAR", brandText:"LLumar Select Pro", sec:"city",
+    addr:"2425 W Hubbard St, Chicago, IL 60612", lat:41.8895, lon:-87.6875, label:"left",
+    site:"https://www.skyautostudio.com/paint-protection-film-chicago-downtown" },
+  { type:"retail", name:"Ceramic Pro Elite Chicago", brand:"KAVACA", brandText:"KAVACA", sec:"city",
+    addr:"506 W 36th St, Chicago, IL 60609", lat:41.8291, lon:-87.6389, label:"left",
+    site:"https://ceramicpro.com/chicago/" },
+  { type:"retail", name:"Status Detail", brand:"STEK", brandText:"STEK", sec:"city", nopin:true,
+    addr:"Chicago, IL — studio location shared at booking",
+    note:"Appointment-based — no public address, so no map pin.",
+    site:"http://statusdetail.com/" },
+  /* ---- retail: suburbs ---- */
+  { type:"retail", name:"CM3 Detailing Studio", brand:"SUNTEK", brandText:"SunTek", sec:"burb",
+    addr:"940 E Chicago St, Elgin, IL 60120", lat:42.0339, lon:-88.2543, label:"left",
+    site:"https://www.cm3detail.com/paint-protection-film" },
+  { type:"retail", name:"Z Tech (Naperville)", brand:"3M", brandText:"3M Scotchgard Pro", sec:"burb",
+    addr:"1572 W Ogden Ave, Naperville, IL 60540", lat:41.7687, lon:-88.1863, label:"right",
+    site:"https://www.ztechnaperville.com/services/paint-protection-film/" },
+  { type:"retail", name:"Z Tech (Countryside)", brand:"3M", brandText:"3M Scotchgard Pro", sec:"burb", approx:true,
+    addr:"9825 W 55th St #D, Countryside, IL 60525", lat:41.7936, lon:-87.8756, label:"below",
+    site:"https://www.ztechnaperville.com/services/paint-protection-film/" },
+  { type:"retail", name:"Parc Fermé", brand:"STEK", brandText:"STEK", sec:"burb",
+    addr:"706 Hillgrove Ave, Western Springs, IL 60558", lat:41.8102, lon:-87.8976, label:"right",
+    site:"https://www.stek-usa.com/installers/usa/il/parc-ferme/" },
+  { type:"retail", name:"MQ Detailing", brand:"STEK", brandText:"STEK", sec:"burb", approx:true,
+    addr:"21644 S Schoolhouse Rd, New Lenox, IL 60451", lat:41.4728, lon:-87.9285, label:"left",
+    site:"https://www.stek-usa.com/installers/usa/il/mq-detailing-llc/" },
+
+  /* ---- ULTRAFIT wholesale customers (purchased) ---- */
+  { type:"uf", name:"Dent Solutions Plus", sec:"uf", spend:5593.16, orders:3,
+    contact:"Chris Wargacki", phone:"+1 773-457-7120", email:"chris.wargacki@gmail.com",
+    addr:"5723 N Meade Ave, Chicago, IL 60646", lat:41.98536, lon:-87.78033, label:"right" },
+  { type:"uf", name:"Alpha Albi", sec:"uf", spend:4137.26, orders:2,
+    contact:"Albi Haxhijaha", phone:"+1 773-900-1442", email:"info@alphaalbi.com",
+    addr:"170 Shepard Ave Unit D, Wheeling, IL 60090", lat:42.12850, lon:-87.91983, label:"right" },
+  { type:"uf", name:"Glosswerks of Chicago", sec:"uf", spend:2280, orders:2,
+    contact:"Kevin Taczynski", phone:"+1 815-219-3806", email:"info@glosswerkschicago.com",
+    addr:"538 Herbert Rd Ste 6, Lakemoor, IL 60051", lat:42.32227, lon:-88.20670, label:"right" },
+  { type:"uf", name:"First Class Autowerks", sec:"uf", spend:2256.21, orders:2,
+    contact:"David Silva", phone:"+1 630-746-3074", email:"davidwrapsnppf@gmail.com",
+    badges:["STEK installer","non-XPEL retail shop"],
+    addr:"10121 S Mandel St, Plainfield, IL 60585", lat:41.69750, lon:-88.24049, label:"left" },
+  { type:"uf", name:"PrimeVue Protection", sec:"uf", spend:2060, orders:2,
+    contact:"Dennis Budz", phone:"+1 630-864-6544", email:"dennis@primevueprotection.com",
+    addr:"10119 S Mandel St, Plainfield, IL 60585", lat:41.69790, lon:-88.23230, label:"right" },
+  { type:"uf", name:"Kdmboy", sec:"uf", spend:1644, orders:2,
+    contact:"Albert Ikramidinov", phone:"+1 224-341-4455", email:"ikramidinovalbert@gmail.com",
+    addr:"3655 W Belle Plaine Ave B, Chicago, IL 60618", lat:41.95552, lon:-87.72001, label:"right" },
+  { type:"uf", name:"LUSTR Automotive", sec:"uf", spend:1558.05, orders:2,
+    contact:"Ivan Rajic", phone:"+1 773-715-4198", email:"info@lustrdetail.com",
+    badges:["⚠ also carries XPEL"],
+    addr:"257 N Woodwork Ln, Palatine, IL 60067", lat:42.11457, lon:-88.05687, label:"right" },
+  { type:"uf", name:"Superior Window Tint", sec:"uf", spend:1272.69, orders:1,
+    contact:"Giovanni Gaona", phone:"+1 331-337-9914", email:"superiorwindowtint1@yahoo.com",
+    addr:"30 Stonehill Rd, Oswego, IL 60543", lat:41.68296, lon:-88.33685, label:"right" },
+  { type:"uf", name:"Tintpro", sec:"uf", spend:551.63, orders:1,
+    contact:"Aitmat Ammatov", phone:"+1 847-544-6784", email:"tintpro.chicago@gmail.com",
+    addr:"514 Pratt Ave, Schaumburg, IL 60193", lat:41.99873, lon:-88.09247, label:"right" },
+  { type:"uf", name:"ProGlass Windshield Repair", sec:"uf", spend:48.05, orders:1,
+    contact:"Clay Maxam", phone:"+1 630-636-0126", email:"info@proglasswindshield.com",
+    note:"Second account address: 203 W McKinley Ave #4, Hinckley, IL.",
+    addr:"224 Kathryn Ln, North Aurora, IL 60542", lat:41.80836, lon:-88.36485, label:"right" },
+  /* purchased — outside metro (no pins) */
+  { type:"uf", name:"Total Eclipse Inc.", sec:"uf-far", spend:1744, orders:2, nopin:true,
+    contact:"Ronnie White", phone:"+1 618-282-4030", email:"white@htc.net",
+    addr:"417 N Main St, Red Bud, IL 62278" },
+  { type:"uf", name:"Exclusive Style & Protection", sec:"uf-far", spend:1099.39, orders:1, nopin:true,
+    contact:"Jorge Lopez", phone:"+1 815-713-5393", email:"windowtinting815@outlook.com",
+    addr:"1231 West 4th St, Sterling, IL 61081" },
+  { type:"uf", name:"Just Wrap It Signs & Designs", sec:"uf-far", spend:1096.19, orders:1, nopin:true,
+    contact:"Blake Nagurne", phone:"+1 417-825-1811", email:"sales@justwrapit.com",
+    addr:"1317 Illinois Ave, Joplin, MO 64801" },
+  { type:"uf", name:"Alpha Auto", sec:"uf-far", spend:1080, orders:1, nopin:true,
+    contact:"Ilya Pavlov", phone:"+1 445-444-3744", email:"info@teamalphaauto.com",
+    addr:"10067 Sandmeyer Ln, Philadelphia, PA 19116" },
+
+  /* ---- ULTRAFIT accounts, no purchases yet ---- */
+  { type:"acct", name:"The Wrap Lab", sec:"acct",
+    contact:"Tommy Georgiou", phone:"+1 708-870-4422", email:"thewraplab@outlook.com",
+    badges:["STEK installer","non-XPEL retail shop"],
+    addr:"11524 194th St, Mokena, IL 60448", lat:41.5368, lon:-87.8974, label:"right" },
+  { type:"acct", name:"Umbra Window Tinting", sec:"acct",
+    contact:"Nino Krstovic", phone:"+1 847-912-1869", email:"info@umbrawindowtinting.com",
+    badges:["⚠ also carries XPEL"],
+    addr:"811 W Higgins Rd, Schaumburg, IL 60195", lat:42.04966, lon:-88.09995, label:"left" },
+  { type:"acct", name:"Royalty Customs Chicago", sec:"acct",
+    contact:"Ahraaz Jamal", phone:"+1 224-435-8068", email:"royaltycustoms123@gmail.com",
+    note:"Second account address: 8120 Lawndale, Skokie, IL.",
+    addr:"7729 Davis St, Morton Grove, IL 60053", lat:42.04608, lon:-87.81956, label:"right" },
+  { type:"acct", name:"Zamu Tints", sec:"acct",
+    contact:"Edwin Zamora", phone:"+1 872-203-1857", email:"edwin@zamutints.com",
+    addr:"5034 N Meade Ave, Chicago, IL 60630", lat:41.97285, lon:-87.78074, label:"left" },
+  { type:"acct", name:"Limitless Restylin", sec:"acct",
+    contact:"Eddie Magana", phone:"+1 630-930-9626", email:"limitlessrestylinllc@gmail.com",
+    addr:"818 Eagle Dr, Bensenville, IL 60106", lat:41.96611, lon:-87.95216, label:"left" },
+  { type:"acct", name:"PGC Wrap", sec:"acct",
+    contact:"Oleg Plopa", phone:"+1 847-609-9044", email:"pgcwrapchicago@gmail.com",
+    addr:"1010 Morse Ave Unit C, Schaumburg, IL 60193", lat:42.00008, lon:-88.10460, label:"left" },
+  { type:"acct", name:"Profit Express Inc", sec:"acct",
+    contact:"Vlad Tonov", email:"vtonov@gmail.com",
+    addr:"1152 W Chatham Dr, Palatine, IL 60067", lat:42.10065, lon:-88.07209, label:"left" },
+  { type:"acct", name:"Jdm Corp.", sec:"acct",
+    contact:"Raul Jimenez", phone:"+1 773-787-3197", email:"quartermilerun@gmail.com",
+    addr:"2736 W Bonnie Brook Ln, Waukegan, IL 60087", lat:42.40223, lon:-87.86380, label:"right" },
+  { type:"acct", name:"JR (Joe Ramirez)", sec:"acct",
+    contact:"Joe Ramirez", phone:"+1 224-523-5826", email:"joeramirez103@gmail.com",
+    addr:"1271 S Elder Ln, Waukegan, IL 60085", lat:42.33694, lon:-87.90874, label:"left" },
+  { type:"acct", name:"CR Tinting & Protection", sec:"acct",
+    contact:"Christopher Rea", phone:"+1 847-922-9827", email:"chris-rea@sbcglobal.net",
+    addr:"4104 Douglas Dr, Zion, IL 60099", lat:42.47830, lon:-87.86992, label:"right" },
+  { type:"acct", name:"PJ Unlimited Inc", sec:"acct", approx:true,
+    contact:"PJ White", phone:"+1 331-333-2676", email:"mecigwholesale@gmail.com",
+    addr:"8404 Wilmette Ave Ste F, Darien, IL 60561", lat:41.7440, lon:-87.9770, label:"right" },
+  { type:"acct", name:"Fresh Rinse", sec:"acct",
+    contact:"Mike Oestmann", phone:"+1 773-368-7364", email:"freshrinseautospa@gmail.com",
+    addr:"2293 Olive Ln, Yorkville, IL 60560", lat:41.67080, lon:-88.42560, label:"right" },
+  { type:"acct", name:"Extreme Protection", sec:"acct",
+    contact:"Luis Viramontes", phone:"+1 630-946-4499", email:"mrvrmnts@sbcglobal.net",
+    addr:"3623 Blake St, Plano, IL 60545", lat:41.65346, lon:-88.50123, label:"right" },
+  { type:"acct", name:"Three Wolves Auto Spa", sec:"acct",
+    contact:"Victor Oliva", phone:"+1 815-212-4957", email:"vic3wolvesautospa@gmail.com",
+    addr:"25328 W Wilson Ct, Plainfield, IL 60586", lat:41.58265, lon:-88.23428, label:"left" },
+  { type:"acct", name:"Motor Cars Of Chicago", sec:"acct",
+    contact:"Bryan Book", phone:"+1 217-891-6377", email:"bryanbook86@gmail.com",
+    addr:"3301 Essington Rd, Joliet, IL 60435", lat:41.58592, lon:-88.16256, label:"right" },
+  { type:"acct", name:"Sunset Window Tint", sec:"acct",
+    contact:"Jose Camacho", phone:"+1 708-400-8009", email:"sunsetwindowtintz@gmail.com",
+    addr:"25858 S Sunset Dr Unit 1, Monee, IL 60449", lat:41.42112, lon:-87.76040, label:"right" },
+  { type:"acct", name:"Bempah Holdings LLC", sec:"acct",
+    contact:"Michael Bempah", phone:"+1 630-863-3139", email:"michael.bempah@yahoo.com",
+    addr:"25933 S White Oak Trl, Channahon, IL 60410", lat:41.41043, lon:-88.25321, label:"right" },
+  /* accounts — outside metro (no pins) */
+  { type:"acct", name:"Tints By Medina", sec:"acct-far", nopin:true,
+    contact:"Jonnathan Medina", phone:"+1 779-970-6726", email:"tintsmedina@gmail.com",
+    addr:"2013 Harrison Ave, Rockford, IL 61104" },
+  { type:"acct", name:"Jones Tint Shop", sec:"acct-far", nopin:true,
+    contact:"Dillon Jones", phone:"+1 217-621-9746", email:"jones_dillion@hotmail.com",
+    addr:"2427 County Road 1150 N, Homer, IL 61849" },
+  { type:"acct", name:"50 Shades of Paint", sec:"acct-far", nopin:true,
+    contact:"Ryan Rippinger", phone:"+1 630-885-2048", email:"sales@50shadespaint.com",
+    addr:"300 W Henry St, Odell, IL 60460" },
+  { type:"acct", name:"JP Autobody & Detailing", sec:"acct-far", nopin:true,
+    contact:"Justin Pruitt", phone:"+1 618-639-8677", email:"jpautobody25@gmail.com",
+    addr:"1001 W Carpenter St, Jerseyville, IL 62052" },
+  { type:"acct", name:"Rich Sudz Detail & Tint", sec:"acct-far", nopin:true,
+    contact:"Richard Britts", phone:"+1 217-899-9913", email:"richsudzdt@gmail.com",
+    addr:"313 E Washington St, Riverton, IL 62561" },
+  { type:"acct", name:"Aeco", sec:"acct-far", nopin:true,
+    contact:"Randy Williams", phone:"+1 773-230-0551", email:"afflaq@icloud.com",
+    addr:"2901 Sandy Ln, Springfield, IL 62711" },
+];
+
+/* ---- projection ---- */
+const B = { lonMin: -88.56, lonMax: -87.44, latMin: 41.38, latMax: 42.52 };
+const W = 640, H = 880, PAD = 8;
+const KX = Math.cos(41.95 * Math.PI / 180);
+const spanX = (B.lonMax - B.lonMin) * KX, spanY = B.latMax - B.latMin;
+const s = Math.min((W - 2*PAD) / spanX, (H - 2*PAD) / spanY);
+const X = lon => PAD + ((lon - B.lonMin) * KX) * s + (W - 2*PAD - spanX*s)/2;
+const Y = lat => PAD + (B.latMax - lat) * s + (H - 2*PAD - spanY*s)/2;
+
+const svg = document.getElementById("map");
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(e);
+  return e;
+}
+
+el("rect", { x:0, y:0, width:W, height:H, rx:8, fill:"var(--surface-1)" });
+
+/* Lake Michigan (approximate shoreline) */
+const shore = [
+  [42.52,-87.790],[42.45,-87.800],[42.36,-87.812],[42.30,-87.830],[42.25,-87.820],
+  [42.20,-87.790],[42.15,-87.760],[42.10,-87.730],[42.06,-87.710],[42.02,-87.670],
+  [41.97,-87.650],[41.93,-87.628],[41.90,-87.610],[41.87,-87.600],[41.83,-87.590],
+  [41.79,-87.568],[41.74,-87.528],[41.70,-87.508],[41.64,-87.468],[41.58,-87.440],[41.52,-87.415]
+];
+let lakePath = "M " + X(shore[0][1]) + " " + Y(shore[0][0]);
+for (let i=1;i<shore.length;i++) lakePath += " L " + X(shore[i][1]) + " " + Y(shore[i][0]);
+lakePath += ` L ${W} ${Y(41.52)} L ${W} 0 L ${X(-87.790)} 0 Z`;
+el("path", { d: lakePath, fill: "var(--lake)", stroke: "var(--baseline)", "stroke-width": 1 });
+const lakeT = el("text", { x: X(-87.560), y: Y(41.95), class: "lake-label", "text-anchor":"middle", transform:`rotate(75 ${X(-87.560)} ${Y(41.95)})` });
+lakeT.textContent = "LAKE MICHIGAN";
+
+/* subtle graticule */
+for (let lat = 41.4; lat <= 42.5; lat += 0.1)
+  el("line", { x1: PAD, y1: Y(lat), x2: W-PAD, y2: Y(lat), stroke: "var(--grid)", "stroke-width": 0.6 });
+for (let lon = -88.5; lon <= -87.5; lon += 0.1)
+  el("line", { x1: X(lon), y1: PAD, x2: X(lon), y2: H-PAD, stroke: "var(--grid)", "stroke-width": 0.6 });
+
+/* reference points */
+const loopX = X(-87.6278), loopY = Y(41.8819);
+el("line", { x1: loopX-4, y1: loopY, x2: loopX+4, y2: loopY, stroke:"var(--muted)", "stroke-width":1.4 });
+el("line", { x1: loopX, y1: loopY-4, x2: loopX, y2: loopY+4, stroke:"var(--muted)", "stroke-width":1.4 });
+const dt = el("text", { x: loopX-7, y: loopY+15, class:"geo-label", "text-anchor":"end" });
+dt.textContent = "The Loop";
+const oh = el("text", { x: X(-87.9090), y: Y(41.9950), class:"geo-label", "text-anchor":"middle" });
+oh.textContent = "O'Hare";
+
+/* pins */
+const tip = document.getElementById("tip");
+const pinEls = {}, itemEls = {};
+let selected = null;
+
+function pinSub(d) {
+  if (d.type === "retail") return d.brandText;
+  if (d.type === "uf") return "UF customer · $" + d.spend.toLocaleString(undefined,{maximumFractionDigits:0}) + " · " + d.orders + (d.orders===1?" order":" orders");
+  return "UF account — no orders yet";
+}
+
+SHOPS.filter(d => !d.nopin).forEach(d => {
+  const x = X(d.lon), y = Y(d.lat);
+  const g = el("g", { class: "pin", tabindex: 0, role: "button", "aria-label": d.name + ", " + pinSub(d) });
+  if (d.type === "retail") {
+    el("circle", { class:"halo", cx:x, cy:y, r:12, stroke: BRANDS[d.brand].color }, g);
+    el("circle", { class:"core", cx:x, cy:y, r:6, fill: BRANDS[d.brand].color }, g);
+  } else {
+    el("circle", { class:"dhalo", cx:x, cy:y, r:12, stroke: "var(--text-primary)" }, g);
+    const r = el("rect", { class: "dcore" + (d.type === "acct" ? " hollow" : ""), x:x-4.6, y:y-4.6, width:9.2, height:9.2,
+      transform:`rotate(45 ${x} ${y})` }, g);
+    if (d.type === "uf") r.setAttribute("fill", "var(--text-primary)");
+  }
+  const t = el("text", { class:"pin-label" }, g);
+  if (d.label === "right") { t.setAttribute("x", x+10); t.setAttribute("y", y+3.5); }
+  else if (d.label === "left") { t.setAttribute("x", x-10); t.setAttribute("y", y+3.5); t.setAttribute("text-anchor","end"); }
+  else { t.setAttribute("x", x); t.setAttribute("y", y+17); t.setAttribute("text-anchor","middle"); }
+  t.textContent = d.name + (d.approx ? " ≈" : "");
+  g.addEventListener("click", () => select(d.name, true));
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(d.name, true); } });
+  g.addEventListener("mousemove", e => showTip(e, d));
+  g.addEventListener("mouseleave", hideTip);
+  pinEls[d.name] = g;
+});
+
+function showTip(e, d) {
+  const r = svg.parentElement.getBoundingClientRect();
+  tip.innerHTML = `<div class="t-name">${d.name}</div><div class="t-sub">${pinSub(d)}<br>${d.addr}${d.contact ? "<br>" + d.contact : ""}</div>`;
+  tip.style.opacity = 1;
+  tip.style.left = Math.min(e.clientX - r.left + 14, r.width - 250) + "px";
+  tip.style.top = (e.clientY - r.top + 10) + "px";
+}
+function hideTip() { tip.style.opacity = 0; }
+
+/* labels toggle */
+const lblBtn = document.getElementById("lblBtn");
+lblBtn.addEventListener("click", () => {
+  svg.classList.toggle("no-labels");
+  lblBtn.textContent = svg.classList.contains("no-labels") ? "Show labels" : "Hide labels";
+});
+
+/* legend */
+const legend = document.getElementById("legend");
+Object.values(BRANDS).filter((b,i,a) => a.findIndex(x => x.color===b.color && x.label===b.label)===i).forEach(b => {
+  const k = document.createElement("span");
+  k.className = "key";
+  k.innerHTML = `<span class="dot" style="background:${b.color}"></span>${b.label}`;
+  legend.appendChild(k);
+});
+const k1 = document.createElement("span");
+k1.className = "key"; k1.innerHTML = `<span class="dia"></span>UF customer (purchased)`;
+legend.appendChild(k1);
+const k2 = document.createElement("span");
+k2.className = "key"; k2.innerHTML = `<span class="dia hollow"></span>UF account (no orders)`;
+legend.appendChild(k2);
+
+/* list */
+const list = document.getElementById("list");
+const head = document.createElement("div");
+head.className = "list-head";
+const nRetail = SHOPS.filter(d=>d.type==="retail").length;
+const nUf = SHOPS.filter(d=>d.type==="uf").length;
+const nAcct = SHOPS.filter(d=>d.type==="acct").length;
+head.textContent = `${nRetail} retail non-XPEL · ${nUf} UF customers · ${nAcct} UF accounts`;
+list.appendChild(head);
+
+function addSection(label) {
+  const s = document.createElement("div");
+  s.className = "section-label";
+  s.textContent = label;
+  list.appendChild(s);
+}
+function gmaps(d) {
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(d.name + " " + d.addr);
+}
+function marker(d) {
+  if (d.type === "retail") return `<span class="dot" style="background:${BRANDS[d.brand].color}"></span>`;
+  return `<span class="dia${d.type==="acct" ? " hollow" : ""}${d.nopin ? " offmap" : ""}"></span>`;
+}
+function addItem(d) {
+  const item = document.createElement("div");
+  item.className = "shop";
+  const right = d.type === "retail"
+    ? `<span class="brand">${d.brandText}</span>`
+    : (d.type === "uf"
+        ? `<span class="spend">$${d.spend.toLocaleString(undefined,{maximumFractionDigits:2})} · ${d.orders} ord</span>`
+        : `<span class="spend">$0</span>`);
+  item.innerHTML = `
+    <div class="row1">${marker(d)}<span class="name">${d.name}</span>${right}</div>
+    ${d.badges ? `<div class="badges">${d.badges.map(b => `<span class="badge${b.startsWith("⚠") ? " warn" : ""}">${b}</span>`).join("")}</div>` : ""}
+    <div class="addr">${d.addr}${d.approx ? " (pin ≈)" : ""}${d.nopin && d.sec.endsWith("far") ? " — outside map area" : ""}</div>
+    ${d.contact ? `<div class="contact">${d.contact}${d.phone ? " · " + d.phone : ""}${d.email ? " · " + d.email : ""}</div>` : ""}
+    ${d.note ? `<div class="note">${d.note}</div>` : ""}
+    <div class="links">
+      <a href="${gmaps(d)}" target="_blank" rel="noopener">Directions ↗</a>
+      ${d.site ? `<a href="${d.site}" target="_blank" rel="noopener">Website ↗</a>` : ""}
+      ${d.phone ? `<a href="tel:${d.phone.replace(/[^+\d]/g,"")}">Call ↗</a>` : ""}
+    </div>`;
+  item.addEventListener("click", e => { if (e.target.tagName !== "A") select(d.name, false); });
+  list.appendChild(item);
+  itemEls[d.name] = item;
+}
+
+addSection("Retail — Chicago city (no XPEL)");
+SHOPS.filter(d => d.sec === "city").forEach(addItem);
+addSection("Retail — suburbs (no XPEL)");
+SHOPS.filter(d => d.sec === "burb").forEach(addItem);
+addSection("ULTRAFIT customers — purchased");
+SHOPS.filter(d => d.sec === "uf").sort((a,b) => b.spend - a.spend).forEach(addItem);
+addSection("ULTRAFIT customers — outside Chicago area");
+SHOPS.filter(d => d.sec === "uf-far").sort((a,b) => b.spend - a.spend).forEach(addItem);
+addSection("ULTRAFIT accounts — no orders yet");
+SHOPS.filter(d => d.sec === "acct").forEach(addItem);
+addSection("ULTRAFIT accounts — outside Chicago area");
+SHOPS.filter(d => d.sec === "acct-far").forEach(addItem);
+
+function select(name, fromMap) {
+  if (selected) {
+    if (pinEls[selected]) pinEls[selected].classList.remove("sel");
+    if (itemEls[selected]) itemEls[selected].classList.remove("sel");
+  }
+  if (selected === name) { selected = null; return; }
+  selected = name;
+  if (pinEls[name]) pinEls[name].classList.add("sel");
+  if (itemEls[name]) {
+    itemEls[name].classList.add("sel");
+    if (fromMap) itemEls[name].scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+</script>
+</body>
+</html>
