@@ -191,6 +191,7 @@
         .scan-results ul { margin: 0; padding-left: 18px; }
         .scan-results li { margin: 3px 0; }
         .scan-results .scan-miss { color: #b26a00; }
+        .scan-results .scan-via { color: #6a7280; font-size: 0.85em; }
         .button-group {
             display: flex;
             gap: 10px;
@@ -487,16 +488,17 @@
             const good = barcodes.filter(b => !b.offPrefix);
             let html = '<div class="scan-title">🔍 Serial numbers from photo</div><ul>';
             for (const b of good) {
-                html += '<li>' + b.value + ' — captured</li>';
+                const via = b.source === 'ocr' ? ' <span class="scan-via">(read as text)</span>' : '';
+                html += '<li>' + b.value + ' — captured' + via + '</li>';
             }
             if (!good.length) {
                 const others = barcodes.filter(b => b.offPrefix);
                 if (others.length) {
                     html += '<li class="scan-miss">Found ' + others.map(b => b.value).join(', ') +
                             ' but no code starting with ' + CODE_PREFIX +
-                            ' — make sure the bottom barcode is visible and retake the photo</li>';
+                            ' — make sure the bottom barcode or printed code is visible and retake the photo</li>';
                 } else {
-                    html += '<li class="scan-miss">No barcode found — make sure the bottom barcode is visible and retake the photo</li>';
+                    html += '<li class="scan-miss">No code found — make sure the bottom barcode or printed code is visible and retake the photo</li>';
                 }
             }
             html += '</ul>';
@@ -510,7 +512,7 @@
             try {
                 const result = await UFScanner.scan(dataUrl, { onProgress: setScanStatus, prefix: CODE_PREFIX });
                 const good = result.barcodes.filter(b => !b.offPrefix);
-                lastScan = { barcodes: good.map(b => ({ value: b.value, format: b.format })) };
+                lastScan = { barcodes: good.map(b => ({ value: b.value, format: b.format, source: b.source })) };
                 showScanResults(result.barcodes);
                 setScanStatus(good.length
                     ? '✓ Photo scanned — ' + good.length + ' serial number' + (good.length > 1 ? 's' : '') + ' captured'
@@ -570,6 +572,12 @@
                 option.textContent = size;
                 sizeSelect.appendChild(option);
             });
+            // Auto-pick the size: the only one if there's just one,
+            // otherwise default to the 60" roll (the shop standard)
+            const def = sizeValues.length === 1
+                ? sizeValues[0]
+                : sizeValues.find(s => s.trim().startsWith('60'));
+            if (def) sizeSelect.value = def;
         }
         function removeItem(itemId) {
             const item = document.getElementById(`item-${itemId}`);

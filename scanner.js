@@ -1,29 +1,38 @@
 /* =========================================================================
-   ULTRAFIT photo scanner — reads the barcodes off the roll boxes in the
-   checkout photo, so the roll codes get submitted with the checkout.
+   ULTRAFIT photo scanner — reads the roll codes off the boxes in the
+   checkout photo, so they get submitted with the checkout. It reads them
+   two ways: the barcode, and the printed code as text (OCR). Either one
+   is enough, so a roll is still captured when its barcode is smudged or
+   turned away but the printed "W…"/"P…" code is legible.
 
    Usage (from a checkout page):
 
      const result = await UFScanner.scan(fileOrDataUrl, {
        onProgress: (msg) => { ... },   // status line updates
        prefix: 'W',                    // keep only codes starting with this
+       ocr: 'auto',                    // 'auto' (default) | true | false
      });
-     // result = { barcodes: [{ value, format }] }
+     // result = { barcodes: [{ value, format, source }], text }
 
    Each box carries more than one barcode; the one that matters is the
-   bottom one, which starts with a known prefix (tint rolls: "W"). The
-   prefix filter keeps just those. Codes are also ordered bottom-first
+   bottom one, which starts with a known prefix (tint rolls: "W", PPF: "P").
+   The prefix filter keeps just those. Codes are also ordered bottom-first
    whenever the decoder reports positions, as an extra safety net.
 
    Decoding: native BarcodeDetector when the browser has it (Chrome on
    Android — the shop phones), with the ZXing library as a fallback for
-   everything else. ZXing loads lazily from a CDN only when needed.
+   everything else. When the barcodes yield no matching code, the photo is
+   run through OCR (Tesseract) and any printed "W…"/"P…" code is pulled out
+   as text — these come back with format "TEXT" and source "ocr". Set
+   ocr:true to always OCR, ocr:false to never. Both ZXing and Tesseract
+   load lazily from a CDN only when they're actually needed.
    ========================================================================= */
 (function () {
   "use strict";
 
   const CDN = {
     zxing: "https://cdn.jsdelivr.net/npm/@zxing/library@0.23.0/umd/index.min.js",
+    tesseract: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
   };
 
   // ---- tiny script loader (cached) ----
@@ -147,10 +156,47 @@
     return found;
   }
 
+  // ---- text (OCR) decoding ----
+  // Pull the printed roll codes out of a block of OCR text. A code is the
+  // prefix letter (W/P) followed by a run of letters/digits/dashes, e.g.
+  // "W12-3456". Matching is case-insensitive; codes come back upper-cased.
+  function extractCodes(text, prefix) {
+    if (!text) return [];
+    const up = String(text).toUpperCase();
+    const esc = String(prefix || "").toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = esc
+      ? new RegExp(esc + "[A-Z0-9][A-Z0-9-]{2,}", "g")   // prefixed: W… / P…
+      : /\b[A-Z0-9][A-Z0-9-]{4,}\b/g;                     // anything code-like
+    const out = [];
+    const seen = new Set();
+    let m;
+    while ((m = re.exec(up))) {
+      const v = m[0].replace(/-+$/, "");                  // trim trailing dashes
+      if (!seen.has(v)) { seen.add(v); out.push(v); }
+    }
+    return out;
+  }
+
+  // Run the photo through Tesseract and return the raw recognised text.
+  async function ocrImage(img, onProgress) {
+    await loadScript(CDN.tesseract);
+    const canvas = toCanvas(img, { maxDim: 1600 });        // downscale — OCR is slow
+    if (onProgress) onProgress("Reading text from photo…");
+    const res = await window.Tesseract.recognize(canvas, "eng", {
+      logger: (m) => {
+        if (onProgress && m.status === "recognizing text") {
+          onProgress("Reading text from photo… " + Math.round((m.progress || 0) * 100) + "%");
+        }
+      },
+    });
+    return (res && res.data && res.data.text) || "";
+  }
+
   // ---- public API ----
   async function scan(src, opts) {
     opts = opts || {};
     const onProgress = opts.onProgress || function () {};
+    const ocrMode = "ocr" in opts ? opts.ocr : "auto";     // 'auto' | true | false
     const img = await loadImage(src);
 
     onProgress("Scanning photo for barcodes…");
@@ -164,11 +210,34 @@
       }
     }
 
+    const matchesPrefix = (v) =>
+      String(v).toUpperCase().indexOf(String(opts.prefix || "").toUpperCase()) === 0;
+    const hasMatch = () => opts.prefix ? barcodes.some((b) => matchesPrefix(b.value)) : barcodes.length > 0;
+
+    // ---- OCR: read the printed code as text ----
+    // Fallback when the barcodes gave no matching code (ocr:'auto', default),
+    // or always (ocr:true). Merged in as { format:'TEXT', source:'ocr' } so
+    // callers treat text-read codes exactly like scanned ones.
+    let text = "";
+    if (ocrMode === true || (ocrMode === "auto" && !hasMatch())) {
+      try {
+        text = await ocrImage(img, onProgress);
+        const known = new Set(barcodes.map((b) => String(b.value).toUpperCase()));
+        for (const v of extractCodes(text, opts.prefix)) {
+          if (!known.has(v)) {
+            known.add(v);
+            barcodes.push({ value: v, format: "TEXT", source: "ocr", y: null });
+          }
+        }
+      } catch (e) {
+        console.warn("Text scan unavailable:", e);
+      }
+    }
+
     // Keep only the codes that matter (e.g. tint rolls start with "W");
     // if none match the prefix, return everything so the page can say so.
     if (opts.prefix) {
-      const want = barcodes.filter((b) =>
-        String(b.value).toUpperCase().indexOf(String(opts.prefix).toUpperCase()) === 0);
+      const want = barcodes.filter((b) => matchesPrefix(b.value));
       if (want.length) barcodes = want;
       else barcodes.forEach((b) => { b.offPrefix = true; });
     }
@@ -176,7 +245,7 @@
     // Bottom-most code first, when positions are known
     barcodes.sort((a, b) => (b.y === null ? -1 : b.y) - (a.y === null ? -1 : a.y));
 
-    return { barcodes: barcodes };
+    return { barcodes: barcodes, text: text };
   }
 
   window.UFScanner = { scan: scan, _cdn: CDN };
