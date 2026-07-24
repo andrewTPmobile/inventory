@@ -379,6 +379,12 @@
         const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxuLDz0BUJLCtfVW-kr6krwLonk6gZ3MvTaem__dSMsGRREyJZJLsgQusI6MTHItUy5/exec";
         let itemCount = 0;
         let photoBase64 = null;
+        let isSubmitting = false;
+        // Unique id per checkout so a repeated POST can be ignored server-side
+        function newSubmissionId() {
+            return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2));
+        }
+        let submissionId = newSubmissionId();
         // Set today's date by default
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('checkoutDate').value = today;
@@ -485,6 +491,7 @@
         });
         document.getElementById('checkoutForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            if (isSubmitting) return;
             if (!APPS_SCRIPT_URL.includes('script.google.com')) {
                 alert('⚠️ Setup required:\n\n1. Create a Google Apps Script\n2. Deploy it as a web app\n3. Replace the deployment URL in this file');
                 return;
@@ -515,18 +522,25 @@
                 return;
             }
             const data = {
+                checkoutType: "TINT",
+                submissionId,
                 employeeName,
                 checkoutDate,
                 items,
                 photoBase64: photoBase64,
                 timestamp: new Date().toLocaleString()
             };
+            const submitBtn = document.querySelector('.submit-btn');
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
             try {
                 const response = await fetch(APPS_SCRIPT_URL, {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
                 if (response.ok) {
+                    submissionId = newSubmissionId();
                     document.getElementById('checkoutForm').style.display = 'none';
                     document.getElementById('successMsg').style.display = 'block';
                     setTimeout(() => {
@@ -554,6 +568,10 @@
                 setTimeout(() => {
                     document.getElementById('errorMsg').style.display = 'none';
                 }, 3000);
+            } finally {
+                isSubmitting = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit checkout';
             }
         });
         // Initialize with first item
