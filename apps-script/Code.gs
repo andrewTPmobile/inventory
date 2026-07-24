@@ -1,31 +1,25 @@
 /**
- * ULTRAFIT / TintPros — Checkout receiver
- * =======================================
+ * TP WINDOW TINT CHECKOUT — receiver
+ * ==================================
  * Receives POSTs from TPTINTCHECKOUT.html and TP-PPFCHECKOUT.html and writes
- * them into the checkout spreadsheet.
+ * them into the "TP WINDOW TINT CHECKOUT" spreadsheet, "Checkouts" tab,
+ * matching the existing columns:
  *
- * One row per roll line. Fixed columns first, then each roll's serial
- * number(s) — read from the photo's bottom barcode (W… = tint, P… = PPF) —
- * are written into the NEXT AVAILABLE COLUMNS of that row.
+ *   A Timestamp | B Employee Name | C Date | D Film Type | E VLT | F Size
+ *   | G Quantity | H Photo Link | I, J, … Serial #
  *
- * Setup (one time):
- *   1. Open script.google.com → the project behind your current deployment
- *      (the /exec URL used by the checkout pages).
- *   2. Replace the code with this file. Save.
- *   3. Deploy → Manage deployments → Edit (pencil) → Version: "New version"
- *      → Deploy. Keep "Anyone" access so the pages can POST to it.
- *      (Re-deploying a NEW deployment would change the URL — editing the
- *      existing one keeps the URL in the pages working.)
+ * The serial numbers scanned from the photo's bottom barcode (W… = tint,
+ * P… = PPF) are written into the NEXT AVAILABLE COLUMNS after Photo Link —
+ * one serial per roll, on the row of the roll it belongs to.
+ *
+ * To update: open the Apps Script project, replace the code with this file,
+ * save, then Deploy → Manage deployments → ✏️ Edit → Version: New version
+ * → Deploy. (Editing the existing deployment keeps the same /exec URL.)
  */
 
-// The "Window Tint Checkout System" spreadsheet
-const SPREADSHEET_ID = '1R6EbLQpQgScl9unT-WTFcHMg1tvBlohMV0QZ5Oz69bI';
-
-// Checkout photos get saved here (folder is created on first use)
-const PHOTO_FOLDER_NAME = 'Checkout Photos';
-
-// Fixed columns. Serials land right after these — the next available columns.
-const HEADERS = ['Timestamp', 'Submission', 'Employee', 'Date', 'Film Type', 'VLT', 'Size', 'Qty', 'Photo', 'Serial #'];
+const SPREADSHEET_ID = '11bjULN40w54GCvDFRpww6GeH--lSB0hjmUhyaHyjDkQ';
+const TINT_TAB = 'Checkouts';
+const PPF_TAB = 'PPF Checkouts';   // created automatically on first PPF checkout
 
 function doPost(e) {
   try {
@@ -36,9 +30,8 @@ function doPost(e) {
       return json_({ ok: true, duplicate: true });
     }
 
-    const tabName = (data.checkoutType || 'CHECKOUT').toUpperCase(); // TINT / PPF
-    const sheet = getSheet_(tabName);
-    const photoUrl = savePhoto_(data);
+    const isPPF = String(data.checkoutType || '').toUpperCase() === 'PPF';
+    const sheet = getSheet_(isPPF ? PPF_TAB : TINT_TAB);
 
     // Serial numbers scanned off the photo's bottom barcodes
     const serials = (data.serials || []).slice();
@@ -50,33 +43,31 @@ function doPost(e) {
       const rowSerials = serials.splice(0, qty);
       rows.push([
         data.timestamp || new Date().toLocaleString(),
-        data.submissionId || '',
         data.employeeName || '',
         data.checkoutDate || '',
         item.product || '',
-        item.vlt || '',        // blank on PPF checkouts
+        item.vlt || '',          // blank on PPF checkouts
         item.size || '',
         qty,
-        photoUrl,
-      ].concat(rowSerials));   // ← serials fill the next available columns
+        '',                      // Photo Link (kept as-is / unused)
+      ].concat(rowSerials));     // ← serials land in the next available columns
     });
 
     // Serials that didn't pair up with a roll line still get recorded
     if (serials.length) {
       rows.push([
         data.timestamp || new Date().toLocaleString(),
-        data.submissionId || '',
         data.employeeName || '',
         data.checkoutDate || '',
-        'UNMATCHED SERIALS', '', '', '',
-        photoUrl,
+        'UNMATCHED SERIALS', '', '', '', '',
       ].concat(serials));
     }
 
-    // Write each row, serials spilling into however many columns they need
     rows.forEach(function (row) {
       sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
     });
+    // Blank spacer row between checkouts, matching the existing sheet style
+    sheet.appendRow(['']);
 
     if (data.submissionId) markProcessed_(data.submissionId);
     return json_({ ok: true, rows: rows.length });
@@ -92,32 +83,18 @@ function getSheet_(tabName) {
   let sheet = ss.getSheetByName(tabName);
   if (!sheet) {
     sheet = ss.insertSheet(tabName);
-  }
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, 9).setValues([[
+      'Timestamp', 'Employee Name', 'Date', 'Film Type', 'VLT', 'Size',
+      'Quantity', 'Photo Link', 'Serial #',
+    ]]);
+    sheet.getRange(1, 1, 1, 9).setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
-  return sheet;
-}
-
-function savePhoto_(data) {
-  try {
-    if (!data.photoBase64) return '';
-    const m = String(data.photoBase64).match(/^data:(image\/\w+);base64,(.+)$/s);
-    if (!m) return '';
-    const blob = Utilities.newBlob(
-      Utilities.base64Decode(m[2]), m[1],
-      (data.checkoutType || 'checkout') + '_' + (data.checkoutDate || '') + '_' +
-      (data.employeeName || '').replace(/\W+/g, '') + '_' + Date.now() + '.jpg'
-    );
-    const folders = DriveApp.getFoldersByName(PHOTO_FOLDER_NAME);
-    const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(PHOTO_FOLDER_NAME);
-    const file = folder.createFile(blob);
-    return file.getUrl();
-  } catch (err) {
-    return 'photo save failed: ' + String(err);
+  // Make sure the serial column has a header on the existing tab too
+  if (!sheet.getRange(1, 9).getValue()) {
+    sheet.getRange(1, 9).setValue('Serial #').setFontWeight('bold');
   }
+  return sheet;
 }
 
 function alreadyProcessed_(id) {
