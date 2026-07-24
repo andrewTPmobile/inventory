@@ -434,16 +434,40 @@
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(event) {
-                    photoBase64 = event.target.result;
-                    document.getElementById('photoImg').src = photoBase64;
+                    const original = event.target.result;
+                    photoBase64 = original;
+                    document.getElementById('photoImg').src = original;
                     document.getElementById('photoPreview').style.display = 'block';
                     document.getElementById('photoStatus').textContent = '✓ Photo captured';
                     document.getElementById('photoStatus').style.color = '#2e7d32';
-                    scanPhoto(photoBase64);
+                    // scan the FULL-SIZE photo (barcodes need the detail)…
+                    scanPhoto(original);
+                    // …but submit a compressed copy — full-size phone photos
+                    // are 5-10 MB and make submitting take forever
+                    compressPhoto(original).then(small => { photoBase64 = small; });
                 };
                 reader.readAsDataURL(file);
             }
         });
+
+        // Shrink to ≤1600px JPEG (~200-400 KB) for a fast submit
+        function compressPhoto(dataUrl) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+                        const c = document.createElement('canvas');
+                        c.width = Math.max(1, Math.round(img.width * scale));
+                        c.height = Math.max(1, Math.round(img.height * scale));
+                        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                        resolve(c.toDataURL('image/jpeg', 0.72));
+                    } catch (e) { resolve(dataUrl); }
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
 
         /* ---- Photo scanner: reads the roll serial numbers off the photo ---- */
         // Each box carries more than one barcode. The BOTTOM one is the roll's

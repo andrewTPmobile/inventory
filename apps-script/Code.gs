@@ -21,6 +21,9 @@ const SPREADSHEET_ID = '11bjULN40w54GCvDFRpww6GeH--lSB0hjmUhyaHyjDkQ';
 const TINT_TAB = 'Checkouts';
 const PPF_TAB = 'PPF Checkouts';   // created automatically on first PPF checkout
 
+// Checkout photos get saved here in Drive (folder is created on first use)
+const PHOTO_FOLDER_NAME = 'Checkout Photos';
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -32,6 +35,7 @@ function doPost(e) {
 
     const isPPF = String(data.checkoutType || '').toUpperCase() === 'PPF';
     const sheet = getSheet_(isPPF ? PPF_TAB : TINT_TAB);
+    const photoUrl = savePhoto_(data);
 
     // Serial numbers scanned off the photo's bottom barcodes
     const serials = (data.serials || []).slice();
@@ -49,7 +53,7 @@ function doPost(e) {
         item.vlt || '',          // blank on PPF checkouts
         item.size || '',
         qty,
-        '',                      // Photo Link (kept as-is / unused)
+        photoUrl,                // Photo Link
       ].concat(rowSerials));     // ← serials land in the next available columns
     });
 
@@ -59,7 +63,7 @@ function doPost(e) {
         data.timestamp || new Date().toLocaleString(),
         data.employeeName || '',
         data.checkoutDate || '',
-        'UNMATCHED SERIALS', '', '', '', '',
+        'UNMATCHED SERIALS', '', '', '', photoUrl,
       ].concat(serials));
     }
 
@@ -95,6 +99,25 @@ function getSheet_(tabName) {
     sheet.getRange(1, 9).setValue('Serial #').setFontWeight('bold');
   }
   return sheet;
+}
+
+function savePhoto_(data) {
+  try {
+    if (!data.photoBase64) return '';
+    const m = String(data.photoBase64).match(/^data:(image\/\w+);base64,(.+)$/s);
+    if (!m) return '';
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(m[2]), m[1],
+      (data.checkoutType || 'checkout') + '_' + (data.checkoutDate || '') + '_' +
+      (data.employeeName || '').replace(/\W+/g, '') + '_' + Date.now() + '.jpg'
+    );
+    const folders = DriveApp.getFoldersByName(PHOTO_FOLDER_NAME);
+    const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(PHOTO_FOLDER_NAME);
+    const file = folder.createFile(blob);
+    return file.getUrl();
+  } catch (err) {
+    return '';   // a photo problem never blocks the checkout row
+  }
 }
 
 function alreadyProcessed_(id) {
