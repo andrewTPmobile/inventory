@@ -445,7 +445,11 @@
             }
         });
 
-        /* ---- Photo scanner: barcodes + label text → auto-fill rolls ---- */
+        /* ---- Photo scanner: reads the roll serial numbers off the photo ---- */
+        // Each box carries more than one barcode. The BOTTOM one is the roll's
+        // serial number — PPF serials always start with P (tint ones with W).
+        // Only those get captured and submitted with the checkout.
+        const CODE_PREFIX = 'P';
         let lastScan = null;
 
         function setScanStatus(msg, color) {
@@ -454,122 +458,22 @@
             el.style.color = color || '#0d47a1';
         }
 
-        function normKey(s) {
-            return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        }
-        // Catalog keys, longest first, so "XP BLACK MATTE" wins over "XP BLACK"
-        const CATALOG_KEYS = productOrder.slice()
-            .sort((a, b) => normKey(b).length - normKey(a).length);
-
-        // Sizes written on labels: 60" x 50ft, 72 X 40 FT, 60x50 …
-        const SIZE_RE = /(\d{2})\s*(?:"|”|''|in(?:ch)?)?\s*[xX×]\s*(\d{2,3})/g;
-        function sizesInText(s) {
-            const out = [];
-            SIZE_RE.lastIndex = 0;
-            let m;
-            while ((m = SIZE_RE.exec(String(s || ''))) !== null) out.push(m[1] + 'X' + m[2]);
-            return out;
-        }
-        function matchSizeTok(productKey, tok) {
-            const options = products[productKey] || [];
-            return options.find(o => normKey(o).indexOf(tok + 'FT') === 0 || normKey(o).indexOf(tok) === 0) || null;
-        }
-        function matchSize(productKey, sizeTokens) {
-            const options = products[productKey] || [];
-            if (options.length === 1) return options[0];
-            for (const tok of sizeTokens || []) {
-                const hit = matchSizeTok(productKey, tok);
-                if (hit) return hit;
-            }
-            return null;
-        }
-
-        // Find product names in the label text, then pair each with the size
-        // written closest to it (labels list the size right after the name).
-        // One detection = { product, size } (size may be null)
-        function detectionsFromText(text) {
-            const raw = String(text || '');
-            const sizeToks = [];
-            SIZE_RE.lastIndex = 0;
-            let m;
-            while ((m = SIZE_RE.exec(raw)) !== null) {
-                sizeToks.push({ tok: m[1] + 'X' + m[2], pos: m.index, used: false });
-            }
-            // OCR mangles spacing, so match names with flexible gaps between words
-            const found = [], claimed = [];
-            for (const key of CATALOG_KEYS) {
-                const kre = new RegExp(
-                    key.trim().split(/\s+/)
-                        .map(t => t.replace(/[^A-Za-z0-9]/g, ''))
-                        .filter(Boolean)
-                        .join('[^A-Za-z0-9]{0,4}'),
-                    'gi');
-                let km;
-                while ((km = kre.exec(raw)) !== null) {
-                    const start = km.index, end = km.index + km[0].length;
-                    // longest names claim their span first — "XP BLACK" won't
-                    // re-fire inside an already-claimed "XP BLACK MATTE"
-                    if (claimed.some(c => start < c.end && end > c.start)) continue;
-                    claimed.push({ start: start, end: end });
-                    found.push({ key: key, pos: start });
-                }
-            }
-            found.sort((a, b) => a.pos - b.pos);
-            return found.map(f => {
-                let best = null, bestd = Infinity;
-                for (const st of sizeToks) {
-                    if (st.used) continue;
-                    const d = st.pos >= f.pos ? st.pos - f.pos : (f.pos - st.pos) * 3; // prefer the size after the name
-                    if (d < bestd && matchSizeTok(f.key, st.tok)) { best = st; bestd = d; }
-                }
-                let size = null;
-                if (best) { size = matchSizeTok(f.key, best.tok); best.used = true; }
-                if (!size && (products[f.key] || []).length === 1) size = products[f.key][0];
-                return { product: f.key, size: size };
-            });
-        }
-
-        // A Shopify SKU match carries the product title + variant size
-        function detectionFromSku(match) {
-            const pn = normKey(match.product);
-            const key = CATALOG_KEYS.find(k => pn.indexOf(normKey(k)) > -1 || normKey(k).indexOf(pn) > -1);
-            if (!key) return null;
-            const size = matchSize(key, sizesInText(match.variant)) ||
-                         (products[key] || []).find(o => normKey(o) === normKey(match.variant)) || null;
-            return { product: key, size: size };
-        }
-
-        function fillRow(det) {
-            // reuse the first row that has no film type picked, else add one
-            let row = [...document.querySelectorAll('.item-row')]
-                .find(r => !r.querySelector('.product-select').value);
-            if (!row) {
-                addItem();
-                const rows = document.querySelectorAll('.item-row');
-                row = rows[rows.length - 1];
-            }
-            const productSel = row.querySelector('.product-select');
-            productSel.value = det.product;
-            productSel.dispatchEvent(new Event('change'));
-            if (det.size) {
-                const sizeSel = row.querySelector('.size-select');
-                if ([...sizeSel.options].some(o => o.value === det.size)) sizeSel.value = det.size;
-            }
-        }
-
-        function showScanResults(dets, result) {
+        function showScanResults(barcodes) {
             const box = document.getElementById('scanResults');
-            const matchedCodes = new Set((result.skuMatches || []).map(m => m.code));
-            const unmatched = (result.barcodes || []).filter(b => !matchedCodes.has(b.value));
-            let html = '<div class="scan-title">🔍 Scanned from photo</div><ul>';
-            for (const d of dets) {
-                html += '<li>' + d.product + (d.size ? ' · ' + d.size : '') + ' — added below, please verify</li>';
+            const good = barcodes.filter(b => !b.offPrefix);
+            let html = '<div class="scan-title">🔍 Serial numbers from photo</div><ul>';
+            for (const b of good) {
+                html += '<li>' + b.value + ' — captured</li>';
             }
-            for (const b of unmatched) {
-                html += '<li class="scan-miss">Barcode ' + b.value + ' — not recognized, pick the roll manually</li>';
-            }
-            if (!dets.length && !unmatched.length) {
-                html += '<li class="scan-miss">No barcode or readable label found — fill in the rolls manually</li>';
+            if (!good.length) {
+                const others = barcodes.filter(b => b.offPrefix);
+                if (others.length) {
+                    html += '<li class="scan-miss">Found ' + others.map(b => b.value).join(', ') +
+                            ' but no code starting with ' + CODE_PREFIX +
+                            ' — make sure the bottom barcode is visible and retake the photo</li>';
+                } else {
+                    html += '<li class="scan-miss">No barcode found — make sure the bottom barcode is visible and retake the photo</li>';
+                }
             }
             html += '</ul>';
             box.innerHTML = html;
@@ -580,28 +484,13 @@
             if (!window.UFScanner) return; // scanner not available — photo still works
             document.getElementById('scanResults').style.display = 'none';
             try {
-                const result = await UFScanner.scan(dataUrl, { onProgress: setScanStatus });
-                lastScan = {
-                    barcodes: result.barcodes,
-                    skuMatches: result.skuMatches,
-                    text: (result.text || '').trim().slice(0, 2000)
-                };
-                // Build detections: SKU matches first (most reliable), then label text
-                const dets = [];
-                const seen = new Set();
-                for (const m of result.skuMatches || []) {
-                    const d = detectionFromSku(m);
-                    if (d) { dets.push(d); seen.add(d.product + '|' + d.size); }
-                }
-                for (const d of detectionsFromText(result.text)) {
-                    const k = d.product + '|' + d.size;
-                    if (!seen.has(k)) { dets.push(d); seen.add(k); }
-                }
-                dets.forEach(fillRow);
-                showScanResults(dets, result);
-                setScanStatus(dets.length
-                    ? '✓ Photo scanned — ' + dets.length + ' roll' + (dets.length > 1 ? 's' : '') + ' detected'
-                    : '✓ Photo captured (nothing auto-detected)', '#2e7d32');
+                const result = await UFScanner.scan(dataUrl, { onProgress: setScanStatus, prefix: CODE_PREFIX });
+                const good = result.barcodes.filter(b => !b.offPrefix);
+                lastScan = { barcodes: good.map(b => ({ value: b.value, format: b.format })) };
+                showScanResults(result.barcodes);
+                setScanStatus(good.length
+                    ? '✓ Photo scanned — ' + good.length + ' serial number' + (good.length > 1 ? 's' : '') + ' captured'
+                    : '✓ Photo captured (no serial number found)', '#2e7d32');
             } catch (err) {
                 console.warn('Scan failed:', err);
                 setScanStatus('✓ Photo captured (scan unavailable)', '#2e7d32');
@@ -710,7 +599,8 @@
                 checkoutDate,
                 items,
                 photoBase64: photoBase64,
-                scan: lastScan,   // barcodes + label text read from the photo
+                // Roll serial numbers read from the photo's bottom barcodes (P…)
+                serials: lastScan ? lastScan.barcodes.map(b => b.value) : [],
                 timestamp: new Date().toLocaleString()
             };
             const submitBtn = document.querySelector('.submit-btn');

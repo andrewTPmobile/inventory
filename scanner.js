@@ -1,31 +1,29 @@
 /* =========================================================================
-   ULTRAFIT photo scanner — reads barcodes AND printed text from the
-   checkout photo, so rolls can be auto-filled into the form.
+   ULTRAFIT photo scanner — reads the barcodes off the roll boxes in the
+   checkout photo, so the roll codes get submitted with the checkout.
 
    Usage (from a checkout page):
 
      const result = await UFScanner.scan(fileOrDataUrl, {
-       onProgress: (msg) => { ... }          // status line updates
+       onProgress: (msg) => { ... },   // status line updates
+       prefix: 'W',                    // keep only codes starting with this
      });
-     // result = {
-     //   barcodes: [{ value, format }],      // every barcode found
-     //   text:     "raw OCR text",           // printed text on the labels
-     //   skuMatches: [{ code, product, variant, sku }]  // barcodes/SKUs that
-     //                                       // matched live Shopify inventory
-     // }
+     // result = { barcodes: [{ value, format }] }
 
-   Barcode decoding: native BarcodeDetector when the browser has it
-   (Chrome on Android — i.e. the shop phones), with the ZXing library as a
-   fallback for everything else. Text: Tesseract.js OCR. Both libraries are
-   loaded lazily from a CDN only when a photo is actually scanned, so the
-   pages stay fast.
+   Each box carries more than one barcode; the one that matters is the
+   bottom one, which starts with a known prefix (tint rolls: "W"). The
+   prefix filter keeps just those. Codes are also ordered bottom-first
+   whenever the decoder reports positions, as an extra safety net.
+
+   Decoding: native BarcodeDetector when the browser has it (Chrome on
+   Android — the shop phones), with the ZXing library as a fallback for
+   everything else. ZXing loads lazily from a CDN only when needed.
    ========================================================================= */
 (function () {
   "use strict";
 
   const CDN = {
     zxing: "https://cdn.jsdelivr.net/npm/@zxing/library@0.23.0/umd/index.min.js",
-    tesseract: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
   };
 
   // ---- tiny script loader (cached) ----
@@ -78,12 +76,20 @@
   }
 
   // ---- barcode decoding ----
+  // Every found code carries y: its rough vertical position in the photo
+  // (0 = top, 1 = bottom), when the decoder can tell. Used to sort
+  // bottom-most first.
   async function detectNative(img) {
     if (!("BarcodeDetector" in window)) return null;
     try {
       const detector = new window.BarcodeDetector();
       const found = await detector.detect(img);
-      return found.map((b) => ({ value: b.rawValue, format: b.format }));
+      const H = img.naturalHeight || 1;
+      return found.map((b) => ({
+        value: b.rawValue,
+        format: b.format,
+        y: b.boundingBox ? (b.boundingBox.y + b.boundingBox.height / 2) / H : null,
+      }));
     } catch (e) {
       return null; // fall through to ZXing
     }
@@ -109,105 +115,36 @@
     await loadScript(CDN.zxing);
     const found = [];
     const seen = new Set();
-    const push = (r) => {
-      if (r && !seen.has(r.value)) { seen.add(r.value); found.push(r); }
+    const push = (r, y) => {
+      if (r && !seen.has(r.value)) {
+        seen.add(r.value);
+        r.y = typeof y === "number" ? y : null;
+        found.push(r);
+      }
     };
 
     // Pass 1: whole image at each rotation (labels can face any way)
     for (const rot of [0, 90, 270, 180]) {
-      push(zxingDecodeCanvas(toCanvas(img, { rot: rot })));
+      push(zxingDecodeCanvas(toCanvas(img, { rot: rot })), null);
     }
 
-    // Pass 2: a 2x2 grid of crops — catches several rolls in one photo,
-    // where each barcode is too small a share of the full frame to decode.
+    // Pass 2: a 3-row band split plus a 2x2 grid — finds codes that are too
+    // small a share of the full frame, and gives a vertical position.
     if (onProgress) onProgress("Scanning photo for barcodes…");
     const W = img.naturalWidth, H = img.naturalHeight;
+    for (let band = 0; band < 3; band++) {
+      const crop = { x: 0, y: (band * H) / 3, w: W, h: H / 3 };
+      push(zxingDecodeCanvas(toCanvas(img, { crop: crop })), (band + 0.5) / 3);
+    }
     for (let gy = 0; gy < 2; gy++) {
       for (let gx = 0; gx < 2; gx++) {
         const crop = { x: (gx * W) / 2, y: (gy * H) / 2, w: W / 2, h: H / 2 };
         for (const rot of [0, 90]) {
-          push(zxingDecodeCanvas(toCanvas(img, { crop: crop, rot: rot })));
+          push(zxingDecodeCanvas(toCanvas(img, { crop: crop, rot: rot })), (gy + 0.5) / 2);
         }
       }
     }
     return found;
-  }
-
-  async function decodeBarcodes(img, onProgress) {
-    const native = await detectNative(img);
-    if (native && native.length) return native;
-    try {
-      return await detectZXing(img, onProgress);
-    } catch (e) {
-      console.warn("Barcode scan unavailable:", e);
-      return native || [];
-    }
-  }
-
-  // ---- OCR ----
-  async function readText(img, onProgress) {
-    try {
-      await loadScript(CDN.tesseract);
-      if (onProgress) onProgress("Reading label text… 0%");
-      const canvas = toCanvas(img, { maxDim: 2000 });
-      const result = await window.Tesseract.recognize(canvas, "eng", {
-        logger: (m) => {
-          if (m.status === "recognizing text" && onProgress) {
-            onProgress("Reading label text… " + Math.round(m.progress * 100) + "%");
-          }
-        },
-      });
-      return (result && result.data && result.data.text) || "";
-    } catch (e) {
-      console.warn("OCR unavailable:", e);
-      return "";
-    }
-  }
-
-  // ---- live inventory SKU lookup ----
-  // Barcodes on ULTRAFIT boxes carry the SKU; match them against the same
-  // /api/inventory feed the dashboard uses. Cached for the page's lifetime.
-  let skuMapPromise = null;
-  function norm(s) {
-    return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  }
-  function getSkuMap() {
-    if (skuMapPromise) return skuMapPromise;
-    skuMapPromise = fetch("/api/inventory")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const map = new Map();
-        ((j && j.rows) || []).forEach((row) => {
-          if (row.sku) {
-            map.set(norm(row.sku), {
-              sku: row.sku, product: row.product, variant: row.variant,
-            });
-          }
-        });
-        return map;
-      })
-      .catch(() => new Map());
-    return skuMapPromise;
-  }
-
-  async function matchSkus(barcodes, text) {
-    const map = await getSkuMap();
-    if (!map.size) return [];
-    const matches = [];
-    const tried = new Set();
-    const tryCode = (code) => {
-      const k = norm(code);
-      if (!k || tried.has(k)) return;
-      tried.add(k);
-      const hit = map.get(k);
-      if (hit) matches.push({ code: code, sku: hit.sku, product: hit.product, variant: hit.variant });
-    };
-    barcodes.forEach((b) => tryCode(b.value));
-    // OCR sometimes reads the SKU printed under the barcode
-    String(text || "").split(/[\s,;|]+/).forEach((tok) => {
-      if (tok.length >= 4) tryCode(tok);
-    });
-    return matches;
   }
 
   // ---- public API ----
@@ -217,18 +154,30 @@
     const img = await loadImage(src);
 
     onProgress("Scanning photo for barcodes…");
-    const barcodes = await decodeBarcodes(img, onProgress);
-
-    let text = "";
-    if (opts.ocr !== false) {
-      text = await readText(img, onProgress);
+    let barcodes = await detectNative(img);
+    if (!barcodes || !barcodes.length) {
+      try {
+        barcodes = await detectZXing(img, onProgress);
+      } catch (e) {
+        console.warn("Barcode scan unavailable:", e);
+        barcodes = barcodes || [];
+      }
     }
 
-    onProgress("Matching against inventory…");
-    const skuMatches = await matchSkus(barcodes, text);
+    // Keep only the codes that matter (e.g. tint rolls start with "W");
+    // if none match the prefix, return everything so the page can say so.
+    if (opts.prefix) {
+      const want = barcodes.filter((b) =>
+        String(b.value).toUpperCase().indexOf(String(opts.prefix).toUpperCase()) === 0);
+      if (want.length) barcodes = want;
+      else barcodes.forEach((b) => { b.offPrefix = true; });
+    }
 
-    return { barcodes: barcodes, text: text, skuMatches: skuMatches };
+    // Bottom-most code first, when positions are known
+    barcodes.sort((a, b) => (b.y === null ? -1 : b.y) - (a.y === null ? -1 : a.y));
+
+    return { barcodes: barcodes };
   }
 
-  window.UFScanner = { scan: scan, norm: norm, _cdn: CDN };
+  window.UFScanner = { scan: scan, _cdn: CDN };
 })();

@@ -426,7 +426,11 @@
             }
         });
 
-        /* ---- Photo scanner: barcodes + label text → auto-fill rolls ---- */
+        /* ---- Photo scanner: reads the roll serial numbers off the photo ---- */
+        // Each box carries more than one barcode. The BOTTOM one is the roll's
+        // serial number — tint serials always start with W (PPF ones with P).
+        // Only those get captured and submitted with the checkout.
+        const CODE_PREFIX = 'W';
         let lastScan = null;
 
         function setScanStatus(msg, color) {
@@ -435,99 +439,22 @@
             el.style.color = color || '#0d47a1';
         }
 
-        // Map scanner output to this page's Film type / VLT / Size dropdowns
-        const SERIES = [
-            { key: 'VS (Vivid Signature)', re: /\bVS\b|VIVID[\s-]*SIGNATURE|SIGNATURE/i },
-            { key: 'VF (Vivid Forte)',     re: /\bVF\b|VIVID[\s-]*FORTE|FORTE/i },
-            { key: 'VC (Vivid Comfort)',   re: /\bVC\b|VIVID[\s-]*COMFORT|COMFORT/i },
-        ];
-        function findSeries(s) {
-            for (const p of SERIES) if (p.re.test(s)) return p.key;
-            return null;
-        }
-        function findVlt(s, seriesKey) {
-            const allowed = products[seriesKey] || ['05','15','25','30','35','50','70','80'];
-            const m = String(s).match(/\b0?(\d{1,2})\s*%?\b/g) || [];
-            for (const raw of m) {
-                const v = String(parseInt(raw, 10)).padStart(2, '0');
-                if (allowed.includes(v)) return v;
-            }
-            return null;
-        }
-        function findSize(s) {
-            const m = String(s).match(/\b(20|24|36|40|60)\s*(?:"|”|''|in(?:ch)?)?\s*[xX×]\s*100(?!\d)/);
-            return m ? m[1] + '" x 100ft' : null;
-        }
-
-        // One detection = { product, vlt, size } (any part may be null)
-        function detectionsFromText(text) {
-            const dets = [];
-            let cur = null;
-            for (const line of String(text || '').split(/\n+/)) {
-                const series = findSeries(line);
-                if (series) {
-                    if (cur) dets.push(cur);
-                    cur = { product: series, vlt: null, size: null };
-                }
-                if (cur) {
-                    if (!cur.vlt) cur.vlt = findVlt(line, cur.product);
-                    if (!cur.size) cur.size = findSize(line);
-                }
-            }
-            if (cur) dets.push(cur);
-            return dets;
-        }
-
-        // A Shopify SKU match carries "product" + variant like '15 / 60" x 100ft'
-        function detectionFromSku(match) {
-            const hay = match.product + ' ' + match.variant;
-            const series = findSeries(hay);
-            if (!series) return null;
-            let vlt = null, size = null;
-            const vm = String(match.variant || '').match(/^\s*(\d{1,2})\s*\//);
-            if (vm) {
-                const v = String(parseInt(vm[1], 10)).padStart(2, '0');
-                if ((products[series] || []).includes(v)) vlt = v;
-            }
-            if (!vlt) vlt = findVlt(hay, series);
-            size = findSize(hay);
-            return { product: series, vlt: vlt, size: size };
-        }
-
-        function fillRow(det) {
-            // reuse the first row that has no film type picked, else add one
-            let row = [...document.querySelectorAll('.item-row')]
-                .find(r => !r.querySelector('.product-select').value);
-            if (!row) {
-                addItem();
-                const rows = document.querySelectorAll('.item-row');
-                row = rows[rows.length - 1];
-            }
-            const productSel = row.querySelector('.product-select');
-            productSel.value = det.product;
-            productSel.dispatchEvent(new Event('change'));
-            if (det.vlt) row.querySelector('.vlt-select').value = det.vlt;
-            if (det.size) {
-                const sizeSel = row.querySelector('.size-select');
-                if ([...sizeSel.options].some(o => o.value === det.size)) sizeSel.value = det.size;
-            }
-        }
-
-        function showScanResults(dets, result) {
+        function showScanResults(barcodes) {
             const box = document.getElementById('scanResults');
-            const matchedCodes = new Set((result.skuMatches || []).map(m => m.code));
-            const unmatched = (result.barcodes || []).filter(b => !matchedCodes.has(b.value));
-            let html = '<div class="scan-title">🔍 Scanned from photo</div><ul>';
-            for (const d of dets) {
-                html += '<li>' + d.product +
-                        (d.vlt ? ' · VLT ' + d.vlt : '') +
-                        (d.size ? ' · ' + d.size : '') + ' — added below, please verify</li>';
+            const good = barcodes.filter(b => !b.offPrefix);
+            let html = '<div class="scan-title">🔍 Serial numbers from photo</div><ul>';
+            for (const b of good) {
+                html += '<li>' + b.value + ' — captured</li>';
             }
-            for (const b of unmatched) {
-                html += '<li class="scan-miss">Barcode ' + b.value + ' — not recognized, pick the roll manually</li>';
-            }
-            if (!dets.length && !unmatched.length) {
-                html += '<li class="scan-miss">No barcode or readable label found — fill in the rolls manually</li>';
+            if (!good.length) {
+                const others = barcodes.filter(b => b.offPrefix);
+                if (others.length) {
+                    html += '<li class="scan-miss">Found ' + others.map(b => b.value).join(', ') +
+                            ' but no code starting with ' + CODE_PREFIX +
+                            ' — make sure the bottom barcode is visible and retake the photo</li>';
+                } else {
+                    html += '<li class="scan-miss">No barcode found — make sure the bottom barcode is visible and retake the photo</li>';
+                }
             }
             html += '</ul>';
             box.innerHTML = html;
@@ -538,28 +465,13 @@
             if (!window.UFScanner) return; // scanner not available — photo still works
             document.getElementById('scanResults').style.display = 'none';
             try {
-                const result = await UFScanner.scan(dataUrl, { onProgress: setScanStatus });
-                lastScan = {
-                    barcodes: result.barcodes,
-                    skuMatches: result.skuMatches,
-                    text: (result.text || '').trim().slice(0, 2000)
-                };
-                // Build detections: SKU matches first (most reliable), then label text
-                const dets = [];
-                const seen = new Set();
-                for (const m of result.skuMatches || []) {
-                    const d = detectionFromSku(m);
-                    if (d) { dets.push(d); seen.add(d.product + '|' + d.vlt + '|' + d.size); }
-                }
-                for (const d of detectionsFromText(result.text)) {
-                    const k = d.product + '|' + d.vlt + '|' + d.size;
-                    if (!seen.has(k)) { dets.push(d); seen.add(k); }
-                }
-                dets.forEach(fillRow);
-                showScanResults(dets, result);
-                setScanStatus(dets.length
-                    ? '✓ Photo scanned — ' + dets.length + ' roll' + (dets.length > 1 ? 's' : '') + ' detected'
-                    : '✓ Photo captured (nothing auto-detected)', '#2e7d32');
+                const result = await UFScanner.scan(dataUrl, { onProgress: setScanStatus, prefix: CODE_PREFIX });
+                const good = result.barcodes.filter(b => !b.offPrefix);
+                lastScan = { barcodes: good.map(b => ({ value: b.value, format: b.format })) };
+                showScanResults(result.barcodes);
+                setScanStatus(good.length
+                    ? '✓ Photo scanned — ' + good.length + ' serial number' + (good.length > 1 ? 's' : '') + ' captured'
+                    : '✓ Photo captured (no serial number found)', '#2e7d32');
             } catch (err) {
                 console.warn('Scan failed:', err);
                 setScanStatus('✓ Photo captured (scan unavailable)', '#2e7d32');
@@ -686,7 +598,8 @@
                 checkoutDate,
                 items,
                 photoBase64: photoBase64,
-                scan: lastScan,   // barcodes + label text read from the photo
+                // Roll serial numbers read from the photo's bottom barcodes (W…)
+                serials: lastScan ? lastScan.barcodes.map(b => b.value) : [],
                 timestamp: new Date().toLocaleString()
             };
             const submitBtn = document.querySelector('.submit-btn');
