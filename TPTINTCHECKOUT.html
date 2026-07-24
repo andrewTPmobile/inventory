@@ -176,6 +176,21 @@
             font-size: 13px;
             color: #2e7d32;
         }
+        .scan-results {
+            display: none;
+            margin-top: 12px;
+            text-align: left;
+            background: white;
+            border: 1px solid #d0e4f5;
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 13px;
+            color: #1a1a1a;
+        }
+        .scan-results .scan-title { font-weight: 600; margin-bottom: 6px; color: #0d47a1; }
+        .scan-results ul { margin: 0; padding-left: 18px; }
+        .scan-results li { margin: 3px 0; }
+        .scan-results .scan-miss { color: #b26a00; }
         .button-group {
             display: flex;
             gap: 10px;
@@ -322,6 +337,7 @@
         }
     </script>
 
+    <script src="/scanner.js"></script>
     <div class="container">
         <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 2px solid #e0e0e0;">
             <img src="https://www.tintprosmobile.com/wp-content/uploads/2026/03/cropped-Tint-Pros-Platinum-Auto-Wraps-2021-Logo-Black-e1622686350565-300x72-1.webp" alt="Tint Pros Logo" style="max-height: 60px; width: auto;">
@@ -356,6 +372,7 @@
                     <img id="photoImg" alt="Photo preview">
                 </div>
                 <div class="photo-status" id="photoStatus"></div>
+                <div class="scan-results" id="scanResults"></div>
             </div>
             <div class="button-group" style="margin-top: 1.5rem;">
                 <button type="submit" class="submit-btn">Submit checkout</button>
@@ -403,10 +420,151 @@
                     document.getElementById('photoPreview').style.display = 'block';
                     document.getElementById('photoStatus').textContent = '✓ Photo captured';
                     document.getElementById('photoStatus').style.color = '#2e7d32';
+                    scanPhoto(photoBase64);
                 };
                 reader.readAsDataURL(file);
             }
         });
+
+        /* ---- Photo scanner: barcodes + label text → auto-fill rolls ---- */
+        let lastScan = null;
+
+        function setScanStatus(msg, color) {
+            const el = document.getElementById('photoStatus');
+            el.textContent = msg;
+            el.style.color = color || '#0d47a1';
+        }
+
+        // Map scanner output to this page's Film type / VLT / Size dropdowns
+        const SERIES = [
+            { key: 'VS (Vivid Signature)', re: /\bVS\b|VIVID[\s-]*SIGNATURE|SIGNATURE/i },
+            { key: 'VF (Vivid Forte)',     re: /\bVF\b|VIVID[\s-]*FORTE|FORTE/i },
+            { key: 'VC (Vivid Comfort)',   re: /\bVC\b|VIVID[\s-]*COMFORT|COMFORT/i },
+        ];
+        function findSeries(s) {
+            for (const p of SERIES) if (p.re.test(s)) return p.key;
+            return null;
+        }
+        function findVlt(s, seriesKey) {
+            const allowed = products[seriesKey] || ['05','15','25','30','35','50','70','80'];
+            const m = String(s).match(/\b0?(\d{1,2})\s*%?\b/g) || [];
+            for (const raw of m) {
+                const v = String(parseInt(raw, 10)).padStart(2, '0');
+                if (allowed.includes(v)) return v;
+            }
+            return null;
+        }
+        function findSize(s) {
+            const m = String(s).match(/\b(20|24|36|40|60)\s*(?:"|”|''|in(?:ch)?)?\s*[xX×]\s*100(?!\d)/);
+            return m ? m[1] + '" x 100ft' : null;
+        }
+
+        // One detection = { product, vlt, size } (any part may be null)
+        function detectionsFromText(text) {
+            const dets = [];
+            let cur = null;
+            for (const line of String(text || '').split(/\n+/)) {
+                const series = findSeries(line);
+                if (series) {
+                    if (cur) dets.push(cur);
+                    cur = { product: series, vlt: null, size: null };
+                }
+                if (cur) {
+                    if (!cur.vlt) cur.vlt = findVlt(line, cur.product);
+                    if (!cur.size) cur.size = findSize(line);
+                }
+            }
+            if (cur) dets.push(cur);
+            return dets;
+        }
+
+        // A Shopify SKU match carries "product" + variant like '15 / 60" x 100ft'
+        function detectionFromSku(match) {
+            const hay = match.product + ' ' + match.variant;
+            const series = findSeries(hay);
+            if (!series) return null;
+            let vlt = null, size = null;
+            const vm = String(match.variant || '').match(/^\s*(\d{1,2})\s*\//);
+            if (vm) {
+                const v = String(parseInt(vm[1], 10)).padStart(2, '0');
+                if ((products[series] || []).includes(v)) vlt = v;
+            }
+            if (!vlt) vlt = findVlt(hay, series);
+            size = findSize(hay);
+            return { product: series, vlt: vlt, size: size };
+        }
+
+        function fillRow(det) {
+            // reuse the first row that has no film type picked, else add one
+            let row = [...document.querySelectorAll('.item-row')]
+                .find(r => !r.querySelector('.product-select').value);
+            if (!row) {
+                addItem();
+                const rows = document.querySelectorAll('.item-row');
+                row = rows[rows.length - 1];
+            }
+            const productSel = row.querySelector('.product-select');
+            productSel.value = det.product;
+            productSel.dispatchEvent(new Event('change'));
+            if (det.vlt) row.querySelector('.vlt-select').value = det.vlt;
+            if (det.size) {
+                const sizeSel = row.querySelector('.size-select');
+                if ([...sizeSel.options].some(o => o.value === det.size)) sizeSel.value = det.size;
+            }
+        }
+
+        function showScanResults(dets, result) {
+            const box = document.getElementById('scanResults');
+            const matchedCodes = new Set((result.skuMatches || []).map(m => m.code));
+            const unmatched = (result.barcodes || []).filter(b => !matchedCodes.has(b.value));
+            let html = '<div class="scan-title">🔍 Scanned from photo</div><ul>';
+            for (const d of dets) {
+                html += '<li>' + d.product +
+                        (d.vlt ? ' · VLT ' + d.vlt : '') +
+                        (d.size ? ' · ' + d.size : '') + ' — added below, please verify</li>';
+            }
+            for (const b of unmatched) {
+                html += '<li class="scan-miss">Barcode ' + b.value + ' — not recognized, pick the roll manually</li>';
+            }
+            if (!dets.length && !unmatched.length) {
+                html += '<li class="scan-miss">No barcode or readable label found — fill in the rolls manually</li>';
+            }
+            html += '</ul>';
+            box.innerHTML = html;
+            box.style.display = 'block';
+        }
+
+        async function scanPhoto(dataUrl) {
+            if (!window.UFScanner) return; // scanner not available — photo still works
+            document.getElementById('scanResults').style.display = 'none';
+            try {
+                const result = await UFScanner.scan(dataUrl, { onProgress: setScanStatus });
+                lastScan = {
+                    barcodes: result.barcodes,
+                    skuMatches: result.skuMatches,
+                    text: (result.text || '').trim().slice(0, 2000)
+                };
+                // Build detections: SKU matches first (most reliable), then label text
+                const dets = [];
+                const seen = new Set();
+                for (const m of result.skuMatches || []) {
+                    const d = detectionFromSku(m);
+                    if (d) { dets.push(d); seen.add(d.product + '|' + d.vlt + '|' + d.size); }
+                }
+                for (const d of detectionsFromText(result.text)) {
+                    const k = d.product + '|' + d.vlt + '|' + d.size;
+                    if (!seen.has(k)) { dets.push(d); seen.add(k); }
+                }
+                dets.forEach(fillRow);
+                showScanResults(dets, result);
+                setScanStatus(dets.length
+                    ? '✓ Photo scanned — ' + dets.length + ' roll' + (dets.length > 1 ? 's' : '') + ' detected'
+                    : '✓ Photo captured (nothing auto-detected)', '#2e7d32');
+            } catch (err) {
+                console.warn('Scan failed:', err);
+                setScanStatus('✓ Photo captured (scan unavailable)', '#2e7d32');
+            }
+        }
         // Add first item on load
         function addItem() {
             const itemsList = document.getElementById('itemsList');
@@ -439,7 +597,7 @@
                         <label>Size</label>
                         <select class="size-select" data-item-id="${itemId}" required>
                             <option value="">Select size...</option>
-                            ${sizes.map(s => `<option value="${s}">${s}</option>`).join('')}
+                            ${sizes.map(s => `<option value="${s.replace(/"/g, '&quot;')}">${s}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -528,6 +686,7 @@
                 checkoutDate,
                 items,
                 photoBase64: photoBase64,
+                scan: lastScan,   // barcodes + label text read from the photo
                 timestamp: new Date().toLocaleString()
             };
             const submitBtn = document.querySelector('.submit-btn');
